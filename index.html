@@ -160,22 +160,30 @@
         function PhotoFrame({ photo, index, onClick, isActive, scene }) {
             const meshRef = useRef();
             const borderRef = useRef();
+            const captionRef = useRef();
 
             // Create mesh only once when scene and photo are available
             useEffect(() => {
                 if (!scene) return;
 
-                const geometry = new THREE.PlaneGeometry(2, 1.5);
                 const loader = new THREE.TextureLoader();
 
                 loader.load(
                     photo.image,
                     (texture) => {
                         console.log('Texture loaded for photo', index, 'at position', photo.position);
-                        const material = new THREE.MeshStandardMaterial({
+
+                        // Calculate aspect ratio from texture
+                        const aspectRatio = texture.image.width / texture.image.height;
+                        const photoHeight = 2;
+                        const photoWidth = photoHeight * aspectRatio;
+
+                        // Create geometry with proper aspect ratio
+                        const geometry = new THREE.PlaneGeometry(photoWidth, photoHeight);
+
+                        // Use MeshBasicMaterial to avoid lighting effects (no filters)
+                        const material = new THREE.MeshBasicMaterial({
                             map: texture,
-                            emissive: 0x000000,
-                            emissiveIntensity: 0,
                             side: THREE.DoubleSide
                         });
 
@@ -187,10 +195,66 @@
                         // Add border
                         const edges = new THREE.EdgesGeometry(geometry);
                         const lineMaterial = new THREE.LineBasicMaterial({
-                            color: 0x888888
+                            color: isActive ? 0xffd700 : 0xcccccc,
+                            linewidth: 2
                         });
                         const border = new THREE.LineSegments(edges, lineMaterial);
                         mesh.add(border);
+
+                        // Add caption as 3D text sprite if caption exists
+                        if (photo.caption) {
+                            const canvas = document.createElement('canvas');
+                            const context = canvas.getContext('2d');
+                            canvas.width = 512;
+                            canvas.height = 128;
+
+                            // Beautiful font styling
+                            context.fillStyle = 'rgba(0, 0, 0, 0.8)';
+                            context.fillRect(0, 0, canvas.width, canvas.height);
+
+                            context.fillStyle = '#ffffff';
+                            context.font = 'italic 28px "Georgia", "Palatino", serif';
+                            context.textAlign = 'center';
+                            context.textBaseline = 'middle';
+
+                            // Word wrap for long captions
+                            const maxWidth = canvas.width - 40;
+                            const words = photo.caption.split(' ');
+                            let line = '';
+                            let y = canvas.height / 2;
+
+                            // Simple word wrap
+                            const lines = [];
+                            for (let word of words) {
+                                const testLine = line + word + ' ';
+                                const metrics = context.measureText(testLine);
+                                if (metrics.width > maxWidth && line !== '') {
+                                    lines.push(line);
+                                    line = word + ' ';
+                                } else {
+                                    line = testLine;
+                                }
+                            }
+                            lines.push(line);
+
+                            // Draw lines
+                            const lineHeight = 32;
+                            const startY = (canvas.height - (lines.length * lineHeight)) / 2 + lineHeight / 2;
+                            lines.forEach((line, i) => {
+                                context.fillText(line.trim(), canvas.width / 2, startY + i * lineHeight);
+                            });
+
+                            const texture = new THREE.CanvasTexture(canvas);
+                            const spriteMaterial = new THREE.SpriteMaterial({ map: texture });
+                            const sprite = new THREE.Sprite(spriteMaterial);
+
+                            // Position caption below the photo
+                            sprite.position.set(0, -photoHeight / 2 - 0.5, 0);
+                            sprite.scale.set(photoWidth * 0.8, photoWidth * 0.8 * 0.25, 1);
+
+                            mesh.add(sprite);
+                            captionRef.current = sprite;
+                        }
 
                         meshRef.current = mesh;
                         borderRef.current = border;
@@ -212,18 +276,18 @@
                             borderRef.current.geometry.dispose();
                             borderRef.current.material.dispose();
                         }
+                        if (captionRef.current) {
+                            captionRef.current.material.dispose();
+                            captionRef.current.material.map.dispose();
+                        }
                     }
                 };
             }, [scene, photo]);
 
-            // Update material when active state changes
+            // Update border when active state changes
             useEffect(() => {
-                if (meshRef.current && meshRef.current.material) {
-                    meshRef.current.material.emissive.setHex(isActive ? 0xffffff : 0x000000);
-                    meshRef.current.material.emissiveIntensity = isActive ? 0.3 : 0;
-                }
                 if (borderRef.current && borderRef.current.material) {
-                    borderRef.current.material.color.setHex(isActive ? 0xffffff : 0x888888);
+                    borderRef.current.material.color.setHex(isActive ? 0xffd700 : 0xcccccc);
                 }
             }, [isActive]);
 
@@ -235,6 +299,7 @@
             const controlsRef = useRef();
             const isDragging = useRef(false);
             const previousMousePosition = useRef({ x: 0, y: 0 });
+            const initialPinchDistance = useRef(null);
 
             useEffect(() => {
                 if (!scene || !camera) return;
@@ -252,8 +317,9 @@
                         const deltaX = e.clientX - previousMousePosition.current.x;
                         const deltaY = e.clientY - previousMousePosition.current.y;
 
-                        camera.position.x += deltaX * 0.01;
-                        camera.position.y -= deltaY * 0.01;
+                        // Reverse direction for intuitive dragging
+                        camera.position.x -= deltaX * 0.01;
+                        camera.position.y += deltaY * 0.01;
 
                         previousMousePosition.current = { x: e.clientX, y: e.clientY };
                     }
@@ -282,8 +348,59 @@
 
                 const handleWheel = (e) => {
                     e.preventDefault();
-                    camera.position.z += e.deltaY * 0.01;
-                    camera.position.z = Math.max(3, Math.min(15, camera.position.z));
+                    // Reverse direction for intuitive zooming (scroll down = zoom out, up = zoom in)
+                    camera.position.z -= e.deltaY * 0.01;
+                    // Increased range to allow navigating through photos at different depths
+                    camera.position.z = Math.max(1, Math.min(20, camera.position.z));
+                };
+
+                // Touch support with pinch-to-zoom
+                const getTouchDistance = (touch1, touch2) => {
+                    const dx = touch1.clientX - touch2.clientX;
+                    const dy = touch1.clientY - touch2.clientY;
+                    return Math.sqrt(dx * dx + dy * dy);
+                };
+
+                const handleTouchStart = (e) => {
+                    if (e.touches.length === 1) {
+                        isDragging.current = true;
+                        previousMousePosition.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+                    } else if (e.touches.length === 2) {
+                        // Pinch gesture started
+                        isDragging.current = false;
+                        initialPinchDistance.current = getTouchDistance(e.touches[0], e.touches[1]);
+                    }
+                };
+
+                const handleTouchMove = (e) => {
+                    e.preventDefault();
+
+                    if (e.touches.length === 1 && isDragging.current) {
+                        // Single finger drag - pan the camera
+                        const deltaX = e.touches[0].clientX - previousMousePosition.current.x;
+                        const deltaY = e.touches[0].clientY - previousMousePosition.current.y;
+
+                        // Reverse direction for intuitive dragging
+                        camera.position.x -= deltaX * 0.01;
+                        camera.position.y += deltaY * 0.01;
+
+                        previousMousePosition.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+                    } else if (e.touches.length === 2 && initialPinchDistance.current !== null) {
+                        // Pinch gesture - zoom in/out
+                        const currentDistance = getTouchDistance(e.touches[0], e.touches[1]);
+                        const delta = initialPinchDistance.current - currentDistance;
+
+                        // Adjust camera Z position based on pinch
+                        camera.position.z += delta * 0.01;
+                        camera.position.z = Math.max(1, Math.min(20, camera.position.z));
+
+                        initialPinchDistance.current = currentDistance;
+                    }
+                };
+
+                const handleTouchEnd = () => {
+                    isDragging.current = false;
+                    initialPinchDistance.current = null;
                 };
 
                 document.addEventListener('mousedown', handleMouseDown);
@@ -291,6 +408,9 @@
                 document.addEventListener('mouseup', handleMouseUp);
                 document.addEventListener('click', handleClick);
                 document.addEventListener('wheel', handleWheel, { passive: false });
+                document.addEventListener('touchstart', handleTouchStart, { passive: false });
+                document.addEventListener('touchmove', handleTouchMove, { passive: false });
+                document.addEventListener('touchend', handleTouchEnd, { passive: true });
 
                 return () => {
                     document.removeEventListener('mousedown', handleMouseDown);
@@ -298,6 +418,9 @@
                     document.removeEventListener('mouseup', handleMouseUp);
                     document.removeEventListener('click', handleClick);
                     document.removeEventListener('wheel', handleWheel);
+                    document.removeEventListener('touchstart', handleTouchStart);
+                    document.removeEventListener('touchmove', handleTouchMove);
+                    document.removeEventListener('touchend', handleTouchEnd);
                 };
             }, [scene, camera, onPhotoClick]);
 
@@ -789,30 +912,6 @@
                                     Next →
                                 </button>
                             </div>
-
-                            {/* Caption Display */}
-                            {activeIndex !== null && photos[activeIndex]?.caption && (
-                                <div style={{
-                                    position: 'absolute',
-                                    bottom: '100px',
-                                    left: '50%',
-                                    transform: 'translateX(-50%)',
-                                    padding: '15px 30px',
-                                    backgroundColor: 'rgba(0,0,0,0.7)',
-                                    color: 'white',
-                                    borderRadius: '30px',
-                                    backdropFilter: 'blur(10px)',
-                                    zIndex: 10,
-                                    maxWidth: '80%',
-                                    textAlign: 'center',
-                                    fontSize: '18px',
-                                    fontStyle: 'italic',
-                                    border: '2px solid rgba(255,255,255,0.3)',
-                                    boxShadow: '0 4px 20px rgba(0,0,0,0.5)'
-                                }}>
-                                    "{photos[activeIndex].caption}"
-                                </div>
-                            )}
 
                             {activeIndex !== null && (
                                 <div style={{
