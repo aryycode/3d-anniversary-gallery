@@ -379,6 +379,7 @@
             const isDragging = useRef(false);
             const previousMousePosition = useRef({ x: 0, y: 0 });
             const initialPinchDistance = useRef(null);
+            const viewingDistanceRef = useRef(5);
 
             useEffect(() => {
                 if (!scene || !camera) return;
@@ -427,10 +428,20 @@
 
                 const handleWheel = (e) => {
                     e.preventDefault();
-                    // Reverse direction for intuitive zooming (scroll down = zoom out, up = zoom in)
-                    camera.position.z -= e.deltaY * 0.01;
-                    // Increased range to allow navigating through photos at different depths
-                    camera.position.z = Math.max(1, Math.min(20, camera.position.z));
+                    // Update viewing distance
+                    viewingDistanceRef.current -= e.deltaY * 0.01;
+                    viewingDistanceRef.current = Math.max(1, Math.min(20, viewingDistanceRef.current));
+
+                    // Move camera to maintain viewing distance from active photo
+                    if (activeIndex !== null && photos[activeIndex]) {
+                        const target = new THREE.Vector3(...photos[activeIndex].position);
+                        const offset = new THREE.Vector3(0, 0, viewingDistanceRef.current);
+                        camera.position.copy(target.clone().add(offset));
+                        camera.lookAt(target);
+                    } else {
+                        // If no active photo, just move camera Z
+                        camera.position.z = viewingDistanceRef.current;
+                    }
                 };
 
                 // Touch support with pinch-to-zoom
@@ -469,9 +480,20 @@
                         const currentDistance = getTouchDistance(e.touches[0], e.touches[1]);
                         const delta = initialPinchDistance.current - currentDistance;
 
-                        // Adjust camera Z position based on pinch
-                        camera.position.z += delta * 0.01;
-                        camera.position.z = Math.max(1, Math.min(20, camera.position.z));
+                        // Update viewing distance
+                        viewingDistanceRef.current += delta * 0.01;
+                        viewingDistanceRef.current = Math.max(1, Math.min(20, viewingDistanceRef.current));
+
+                        // Move camera to maintain viewing distance from active photo
+                        if (activeIndex !== null && photos[activeIndex]) {
+                            const target = new THREE.Vector3(...photos[activeIndex].position);
+                            const offset = new THREE.Vector3(0, 0, viewingDistanceRef.current);
+                            camera.position.copy(target.clone().add(offset));
+                            camera.lookAt(target);
+                        } else {
+                            // If no active photo, just move camera Z
+                            camera.position.z = viewingDistanceRef.current;
+                        }
 
                         initialPinchDistance.current = currentDistance;
                     }
@@ -501,16 +523,18 @@
                     document.removeEventListener('touchmove', handleTouchMove);
                     document.removeEventListener('touchend', handleTouchEnd);
                 };
-            }, [scene, camera, onPhotoClick]);
+            }, [scene, camera, onPhotoClick, activeIndex, photos]);
 
             useEffect(() => {
                 if (activeIndex !== null && photos[activeIndex] && camera) {
                     console.log('Moving camera to photo', activeIndex, 'at position', photos[activeIndex].position);
                     const target = new THREE.Vector3(...photos[activeIndex].position);
-                    const offset = new THREE.Vector3(0, 0, 3);
+
+                    // Use stored viewing distance (preserves zoom level)
+                    const offset = new THREE.Vector3(0, 0, viewingDistanceRef.current);
                     const newPosition = target.clone().add(offset);
 
-                    const duration = 1000;
+                    const duration = 800;
                     const start = Date.now();
                     const startPos = camera.position.clone();
 
