@@ -428,20 +428,19 @@
 
                 const handleWheel = (e) => {
                     e.preventDefault();
-                    // Update viewing distance
-                    viewingDistanceRef.current -= e.deltaY * 0.01;
-                    viewingDistanceRef.current = Math.max(1, Math.min(20, viewingDistanceRef.current));
+                    // Simple zoom - just move camera forward/backward
+                    const zoomSpeed = e.deltaY * 0.01;
 
-                    // Move camera to maintain viewing distance from active photo
-                    if (activeIndex !== null && photos[activeIndex]) {
-                        const target = new THREE.Vector3(...photos[activeIndex].position);
-                        const offset = new THREE.Vector3(0, 0, viewingDistanceRef.current);
-                        camera.position.copy(target.clone().add(offset));
-                        camera.lookAt(target);
-                    } else {
-                        // If no active photo, just move camera Z
-                        camera.position.z = viewingDistanceRef.current;
-                    }
+                    // Get camera's forward direction
+                    const direction = new THREE.Vector3(0, 0, 1);
+                    direction.applyQuaternion(camera.quaternion);
+
+                    // Move camera along its viewing direction
+                    camera.position.addScaledVector(direction, zoomSpeed);
+
+                    // Update viewing distance for Next/Previous navigation
+                    viewingDistanceRef.current = camera.position.z;
+                    viewingDistanceRef.current = Math.max(1, Math.min(20, viewingDistanceRef.current));
                 };
 
                 // Touch support with pinch-to-zoom
@@ -480,20 +479,16 @@
                         const currentDistance = getTouchDistance(e.touches[0], e.touches[1]);
                         const delta = initialPinchDistance.current - currentDistance;
 
-                        // Update viewing distance
-                        viewingDistanceRef.current += delta * 0.01;
-                        viewingDistanceRef.current = Math.max(1, Math.min(20, viewingDistanceRef.current));
+                        // Get camera's forward direction
+                        const direction = new THREE.Vector3(0, 0, 1);
+                        direction.applyQuaternion(camera.quaternion);
 
-                        // Move camera to maintain viewing distance from active photo
-                        if (activeIndex !== null && photos[activeIndex]) {
-                            const target = new THREE.Vector3(...photos[activeIndex].position);
-                            const offset = new THREE.Vector3(0, 0, viewingDistanceRef.current);
-                            camera.position.copy(target.clone().add(offset));
-                            camera.lookAt(target);
-                        } else {
-                            // If no active photo, just move camera Z
-                            camera.position.z = viewingDistanceRef.current;
-                        }
+                        // Move camera along its viewing direction
+                        camera.position.addScaledVector(direction, delta * 0.01);
+
+                        // Update viewing distance for Next/Previous navigation
+                        viewingDistanceRef.current = camera.position.z;
+                        viewingDistanceRef.current = Math.max(1, Math.min(20, viewingDistanceRef.current));
 
                         initialPinchDistance.current = currentDistance;
                     }
@@ -523,7 +518,7 @@
                     document.removeEventListener('touchmove', handleTouchMove);
                     document.removeEventListener('touchend', handleTouchEnd);
                 };
-            }, [scene, camera, onPhotoClick, activeIndex, photos]);
+            }, [scene, camera, onPhotoClick]);
 
             useEffect(() => {
                 if (activeIndex !== null && photos[activeIndex] && camera) {
