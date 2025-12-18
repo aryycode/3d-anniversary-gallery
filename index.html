@@ -110,16 +110,21 @@
                 cameraRef.current = camera;
                 rendererRef.current = renderer;
 
-                const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+                // Improve lighting for better photo visibility
+                const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
                 scene.add(ambientLight);
 
-                const pointLight1 = new THREE.PointLight(0xffffff, 1);
+                const pointLight1 = new THREE.PointLight(0xffffff, 1.5);
                 pointLight1.position.set(10, 10, 10);
                 scene.add(pointLight1);
 
-                const pointLight2 = new THREE.PointLight(0xffffff, 0.5);
+                const pointLight2 = new THREE.PointLight(0xffffff, 1);
                 pointLight2.position.set(-10, -10, -10);
                 scene.add(pointLight2);
+
+                const pointLight3 = new THREE.PointLight(0xffffff, 0.8);
+                pointLight3.position.set(0, 0, 10);
+                scene.add(pointLight3);
 
                 const handleResize = () => {
                     camera.aspect = window.innerWidth / window.innerHeight;
@@ -154,45 +159,73 @@
         // Photo Frame Component
         function PhotoFrame({ photo, index, onClick, isActive, scene }) {
             const meshRef = useRef();
+            const borderRef = useRef();
 
+            // Create mesh only once when scene and photo are available
             useEffect(() => {
                 if (!scene) return;
 
                 const geometry = new THREE.PlaneGeometry(2, 1.5);
                 const loader = new THREE.TextureLoader();
 
-                loader.load(photo.image, (texture) => {
-                    const material = new THREE.MeshStandardMaterial({
-                        map: texture,
-                        emissive: isActive ? 0xffffff : 0x000000,
-                        emissiveIntensity: isActive ? 0.3 : 0
-                    });
+                loader.load(
+                    photo.image,
+                    (texture) => {
+                        console.log('Texture loaded for photo', index, 'at position', photo.position);
+                        const material = new THREE.MeshStandardMaterial({
+                            map: texture,
+                            emissive: 0x000000,
+                            emissiveIntensity: 0,
+                            side: THREE.DoubleSide
+                        });
 
-                    const mesh = new THREE.Mesh(geometry, material);
-                    mesh.position.set(...photo.position);
-                    mesh.rotation.set(...photo.rotation);
-                    mesh.userData = { photoId: photo.id, index };
+                        const mesh = new THREE.Mesh(geometry, material);
+                        mesh.position.set(...photo.position);
+                        mesh.rotation.set(...photo.rotation);
+                        mesh.userData = { photoId: photo.id, index };
 
-                    // Add border
-                    const edges = new THREE.EdgesGeometry(geometry);
-                    const lineMaterial = new THREE.LineBasicMaterial({
-                        color: isActive ? 0xffffff : 0x888888
-                    });
-                    const border = new THREE.LineSegments(edges, lineMaterial);
-                    mesh.add(border);
+                        // Add border
+                        const edges = new THREE.EdgesGeometry(geometry);
+                        const lineMaterial = new THREE.LineBasicMaterial({
+                            color: 0x888888
+                        });
+                        const border = new THREE.LineSegments(edges, lineMaterial);
+                        mesh.add(border);
 
-                    meshRef.current = mesh;
-                    scene.add(mesh);
-                });
+                        meshRef.current = mesh;
+                        borderRef.current = border;
+                        scene.add(mesh);
+                        console.log('Mesh added to scene. Total objects in scene:', scene.children.length);
+                    },
+                    undefined,
+                    (error) => {
+                        console.error('Error loading texture for photo', index, ':', error);
+                    }
+                );
 
                 return () => {
                     if (meshRef.current) {
                         scene.remove(meshRef.current);
                         meshRef.current.geometry.dispose();
                         meshRef.current.material.dispose();
+                        if (borderRef.current) {
+                            borderRef.current.geometry.dispose();
+                            borderRef.current.material.dispose();
+                        }
                     }
                 };
-            }, [scene, photo, isActive]);
+            }, [scene, photo]);
+
+            // Update material when active state changes
+            useEffect(() => {
+                if (meshRef.current && meshRef.current.material) {
+                    meshRef.current.material.emissive.setHex(isActive ? 0xffffff : 0x000000);
+                    meshRef.current.material.emissiveIntensity = isActive ? 0.3 : 0;
+                }
+                if (borderRef.current && borderRef.current.material) {
+                    borderRef.current.material.color.setHex(isActive ? 0xffffff : 0x888888);
+                }
+            }, [isActive]);
 
             return null;
         }
@@ -270,6 +303,7 @@
 
             useEffect(() => {
                 if (activeIndex !== null && photos[activeIndex] && camera) {
+                    console.log('Moving camera to photo', activeIndex, 'at position', photos[activeIndex].position);
                     const target = new THREE.Vector3(...photos[activeIndex].position);
                     const offset = new THREE.Vector3(0, 0, 3);
                     const newPosition = target.clone().add(offset);
@@ -288,6 +322,8 @@
 
                         if (progress < 1) {
                             requestAnimationFrame(animate);
+                        } else {
+                            console.log('Camera animation complete. Camera at:', camera.position, 'looking at:', target);
                         }
                     };
                     animate();
@@ -572,26 +608,40 @@
                     const result = await window.storage.get('anniversary-photos');
                     if (result && result.value) {
                         const loadedPhotos = JSON.parse(result.value);
+                        console.log('Loaded photos:', loadedPhotos.length);
                         setPhotos(loadedPhotos);
                         // Auto-show first photo on load
                         if (loadedPhotos.length > 0) {
-                            setActiveIndex(0);
+                            setTimeout(() => {
+                                console.log('Setting active index to 0');
+                                setActiveIndex(0);
+                            }, 100);
                         }
+                    } else {
+                        console.log('No photos in storage');
                     }
                 } catch (error) {
-                    console.log('No existing photos found');
+                    console.log('Error loading photos:', error);
                 }
                 setLoading(false);
             };
 
             const handleNext = () => {
                 if (photos.length === 0) return;
-                setActiveIndex((prev) => (prev === null ? 0 : (prev + 1) % photos.length));
+                setActiveIndex((prev) => {
+                    const newIndex = prev === null ? 0 : (prev + 1) % photos.length;
+                    console.log('handleNext: prev =', prev, ', new =', newIndex);
+                    return newIndex;
+                });
             };
 
             const handlePrev = () => {
                 if (photos.length === 0) return;
-                setActiveIndex((prev) => (prev === null ? photos.length - 1 : (prev - 1 + photos.length) % photos.length));
+                setActiveIndex((prev) => {
+                    const newIndex = prev === null ? photos.length - 1 : (prev - 1 + photos.length) % photos.length;
+                    console.log('handlePrev: prev =', prev, ', new =', newIndex);
+                    return newIndex;
+                });
             };
 
             useEffect(() => {
