@@ -1,0 +1,24 @@
+version: '3.8'
+
+services:
+  anniversary-gallery:
+    build: .
+    container_name: anniversary-gallery
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    volumes:
+      # Persist photo data
+      - ./data:/app/data
+      # For development: mount source code (comment out for production)
+      # - ./server.js:/app/server.js
+      # - ./public:/app/public
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+    networks:
+      - gallery-network
+
+networks:
+  gallery-network:
+    driver: bridge

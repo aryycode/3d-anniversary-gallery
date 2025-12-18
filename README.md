@@ -1,322 +1,245 @@
-# 🎉 3D Anniversary Gallery
+# 🎨 3D Anniversary Gallery
 
-Aplikasi web interaktif untuk menampilkan foto-foto anniversary dalam gallery 3D yang indah dan immersive. Foto-foto ditampilkan tersebar secara acak dalam ruang 3D dengan efek floating yang elegan.
+A beautiful 3D photo gallery with Node.js backend, Express server, and Three.js 3D visualization.
 
-![Anniversary Gallery Demo](https://img.shields.io/badge/Status-Production%20Ready-success)
-![License](https://img.shields.io/badge/License-MIT-blue)
-![Made with Love](https://img.shields.io/badge/Made%20with-%E2%9D%A4%EF%B8%8F-red)
+## ✨ Features
 
-## ✨ Fitur Utama
+- 🎭 **3D Photo Gallery** with Three.js and orbit controls
+- 💖 **Romantic Background** with floating hearts and twinkling stars
+- 📱 **Touch & Swipe Gestures** for mobile support
+- 🔄 **Smooth Orbit Camera** with natural perspective
+- 💾 **Server-Side Storage** using JSON files
+- 🖼️ **Automatic Image Compression** to save space
+- 🔒 **Protected Admin Panel** with URL-based authentication
+- 🐳 **Docker Support** for easy deployment
 
-### 🖼️ Gallery 3D Interaktif
+## 🚀 Quick Start
 
-- **Scattered Layout**: Foto-foto tersebar tidak beraturan dalam ruang 3D untuk tampilan yang artistic
-- **Smooth Navigation**: Klik foto untuk fokus dengan transisi kamera yang smooth
-- **Floating Animation**: Setiap foto memiliki animasi floating yang halus
-- **Interactive Controls**:
-  - Mouse drag untuk rotate view
-  - Scroll/pinch untuk zoom in/out
-  - Keyboard arrows (←/→) untuk navigasi
-  - Tombol Previous/Next di UI
-
-### 🎨 Visual & Desain
-
-- Background gradient gelap yang elegant
-- Glow effect pada foto yang sedang aktif
-- Border putih pada setiap frame foto
-- Caption yang muncul saat hover atau foto aktif
-- Responsive design untuk desktop dan mobile
-
-### ⚙️ Admin Panel
-
-- Upload foto dengan mudah (support drag & drop)
-- Tambah caption untuk setiap foto
-- Edit foto dan caption yang sudah ada
-- Hapus foto
-- Preview langsung sebelum save
-- Grid layout untuk manajemen foto
-
-### 💾 Data Persistence
-
-- Semua foto dan data tersimpan di browser (localStorage)
-- Data tidak hilang saat refresh atau tutup browser
-- Tidak perlu database eksternal
-- Privacy terjaga karena data tersimpan lokal
-
-## 🚀 Deployment Options
-
-### 1. Netlify (Termudah - Drag & Drop)
+### Option 1: Using Docker (Recommended)
 
 ```bash
-# Langsung drag & drop file index.html ke:
-https://app.netlify.com/drop
-```
-
-### 2. Vercel
-
-```bash
-# Login ke Vercel
-vercel login
-
-# Deploy
-vercel --prod
-```
-
-### 3. GitHub Pages
-
-```bash
-# Push ke GitHub repository
-git add .
-git commit -m "Deploy anniversary gallery"
-git push origin main
-
-# Aktifkan GitHub Pages di Settings → Pages
-```
-
-### 4. Coolify (Self-Hosted)
-
-**Opsi A: Static Site**
-
-1. Push repository ke GitHub/GitLab
-2. Di Coolify: New Resource → Public Repository
-3. Pilih "Static Site" build pack
-4. Deploy!
-
-**Opsi B: Docker + Nginx**
-
-```bash
-# Build image
-docker build -t anniversary-gallery .
-
-# Run container
-docker run -d -p 8080:80 anniversary-gallery
-```
-
-**Opsi C: Docker Compose**
-
-```bash
+# Build and start the container
 docker-compose up -d
+
+# View logs
+docker-compose logs -f
+
+# Stop the container
+docker-compose down
 ```
 
-## 📁 Struktur Project
+Access the gallery at: http://localhost:3000
+
+### Option 2: Using Node.js
+
+1. **Install Dependencies**
+   ```bash
+   npm install
+   ```
+
+2. **Start the Server**
+   ```bash
+   npm start
+   ```
+
+   Or for development with auto-restart:
+   ```bash
+   npm run dev
+   ```
+
+3. **Open in Browser**
+   - Gallery: http://localhost:3000
+   - Admin Panel: http://localhost:3000/admin?admin=aryy
+
+## 📁 File Structure
 
 ```
 anniversary-gallery/
-├── index.html          # Main application file
-├── Dockerfile          # Docker configuration
-├── nginx.conf          # Nginx configuration
-├── docker-compose.yml  # Docker Compose setup
-└── README.md          # Documentation
+├── server.js                 # Express server with API routes
+├── package.json              # Node.js dependencies
+├── Dockerfile                # Docker container definition
+├── docker-compose.yml        # Docker Compose configuration
+├── .dockerignore             # Docker ignore rules
+├── .gitignore                # Git ignore rules
+├── README.md                 # This file
+├── data/
+│   └── photos.json           # Photo storage (JSON format)
+└── public/
+    ├── index.html            # Main gallery page
+    ├── admin.html            # Admin panel page
+    ├── css/
+    │   └── style.css         # Stylesheets
+    └── js/
+        ├── api.js            # API client
+        ├── gallery.js        # Gallery React components
+        └── admin.js          # Admin React components
 ```
 
-## 🛠️ Teknologi yang Digunakan
+## 🎮 Usage
 
-- **React 18** - UI framework
-- **Three.js** - 3D rendering engine
-- **Vanilla JavaScript** - Core functionality
-- **HTML5 Canvas** - 3D graphics
-- **LocalStorage API** - Data persistence
-- **Nginx** - Web server (untuk Docker deployment)
+### Gallery Controls
 
-## 💻 Cara Menggunakan
+**Mouse/Desktop:**
+- **Drag**: Rotate camera around the gallery
+- **Scroll**: Zoom in/out
+- **Quick Swipe Left**: Next photo
+- **Quick Swipe Right**: Previous photo
+- **Click Photo**: Focus on that photo
+- **Next/Previous Buttons**: Navigate sequentially
 
-### Menambah Foto
+**Touch/Mobile:**
+- **Swipe**: Rotate camera (orbit view)
+- **Two-Finger Pinch**: Zoom in/out
+- **Quick Swipe Left**: Next photo
+- **Quick Swipe Right**: Previous photo
+- **Tap Photo**: Focus on that photo
 
-1. Buka aplikasi di browser
-2. Klik tombol **"Kelola Gallery"** di kanan atas
-3. Klik **"Choose File"** untuk upload foto
-4. Masukkan caption (opsional)
-5. Klik **"Simpan"**
-6. Klik **"Kembali ke Gallery"** untuk melihat hasilnya
+### Admin Panel
 
-### Navigasi Gallery
+Access: `http://localhost:3000/admin?admin=aryy`
 
-- **Mouse/Touch Drag**: Putar view untuk melihat sekeliling
-- **Scroll/Pinch**: Zoom in dan zoom out
-- **Klik Foto**: Fokus ke foto tertentu dengan transisi smooth
-- **Arrow Keys (←/→)**: Navigasi ke foto sebelumnya/berikutnya
-- **Tombol UI**: Previous dan Next button di bawah layar
+**Features:**
+- 📤 Upload photos (auto-compressed to JPEG)
+- ✏️ Add/edit captions
+- 🗑️ Delete photos
+- 👁️ Preview before saving
+- 💾 All changes saved to server
 
-### Edit/Hapus Foto
+## 🔧 Configuration
 
-1. Masuk ke halaman **"Kelola Gallery"**
-2. Klik **"Edit"** pada foto yang ingin diubah
-3. Atau klik **"Hapus"** untuk menghapus foto
+### Server Configuration
 
-## 🔧 Konfigurasi
-
-### Mengubah Posisi Foto
-
-Edit fungsi `generateRandomPosition()` di dalam kode:
-
+Edit `server.js`:
 ```javascript
-const generateRandomPosition = () => {
-  return [
-    (Math.random() - 0.5) * 10, // X axis (horizontal spread)
-    (Math.random() - 0.5) * 6, // Y axis (vertical spread)
-    (Math.random() - 0.5) * 8, // Z axis (depth)
-  ];
-};
+const PORT = 3000;           // Server port
+const adminKey = 'aryy';     // Admin access key
 ```
 
-### Mengubah Rotasi Foto
+### Image Compression
 
-Edit fungsi `generateRandomRotation()`:
-
+Edit `public/js/api.js`:
 ```javascript
-const generateRandomRotation = () => {
-  return [
-    (Math.random() - 0.5) * 0.3, // X rotation
-    (Math.random() - 0.5) * 0.5, // Y rotation
-    0, // Z rotation (keep flat)
-  ];
-};
+compressImage(dataUrl, 1920, 0.85)
+// maxWidth: 1920px
+// quality: 0.85 (0-1 scale)
 ```
 
-### Mengubah Background
+## 🐳 Docker Commands
 
-Cari style `background: 'linear-gradient(...)'` dan sesuaikan:
+```bash
+# Build the image
+docker-compose build
 
-```javascript
-style={{ background: 'linear-gradient(to bottom, #0a0a0a, #1a1a2e)' }}
+# Start in background
+docker-compose up -d
+
+# View logs
+docker-compose logs -f
+
+# Stop containers
+docker-compose down
+
+# Rebuild and restart
+docker-compose up -d --build
+
+# Access container shell
+docker exec -it anniversary-gallery sh
 ```
 
-## 🌐 Custom Domain Setup
+## 📡 API Endpoints
 
-### Untuk Netlify/Vercel:
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/photos` | Get all photos |
+| POST | `/api/photos` | Save photos array |
+| DELETE | `/api/photos/:id` | Delete specific photo |
 
-1. Beli domain di Namecheap/GoDaddy
-2. Di dashboard platform, tambahkan custom domain
-3. Update DNS records di domain provider
-4. SSL otomatis di-generate
+### Example API Response
 
-### Untuk Coolify:
+```json
+{
+  "photos": [
+    {
+      "id": "1703001234567",
+      "image": "data:image/jpeg;base64,/9j/4AAQSkZJRg...",
+      "caption": "Our first anniversary! ❤️",
+      "position": [2.5, 0.3, -1.2],
+      "rotation": [0.1, -0.2, 0]
+    }
+  ]
+}
+```
 
-1. Deploy aplikasi terlebih dahulu
-2. Di Coolify dashboard → tab "Domains"
-3. Tambahkan domain Anda
-4. Update DNS A record:
-   - **Type**: A
-   - **Name**: @ atau subdomain
-   - **Value**: IP server Coolify
-   - **TTL**: 3600
-5. SSL otomatis via Let's Encrypt
+## 💾 Data Storage
 
-## 🔒 Security Features
+**Location**: `data/photos.json`
 
-- Content Security Policy headers
-- XSS protection enabled
-- Frame options configured
-- No external dependencies untuk runtime
-- Data tersimpan lokal (tidak dikirim ke server)
+**Structure**: Each photo contains:
+- `id`: Unique timestamp identifier
+- `image`: Base64-encoded JPEG data
+- `caption`: Photo caption/description
+- `position`: [x, y, z] coordinates in 3D space
+- `rotation`: [x, y, z] rotation angles
 
-## 📱 Browser Support
+**Volume Mount**: The `data/` directory is mounted as a Docker volume to persist photos across container restarts.
 
-- ✅ Chrome 90+ (Recommended)
-- ✅ Firefox 88+
-- ✅ Safari 14+
-- ✅ Edge 90+
-- ✅ Mobile browsers (iOS Safari, Chrome Mobile)
+## 🔒 Security Notes
 
-**Minimum Requirements:**
+- Admin panel requires `?admin=aryy` parameter
+- Change the admin key in production
+- Consider adding environment variables for sensitive data
+- Base64 images are stored server-side (not in browser)
 
-- WebGL support
-- ES6 JavaScript support
-- LocalStorage enabled
+## 🛠️ Development
 
-## 🐛 Troubleshooting
+```bash
+# Install dependencies
+npm install
 
-### Foto tidak muncul setelah upload
+# Run with nodemon (auto-restart)
+npm run dev
 
-- **Solusi**: Pastikan ukuran foto tidak terlalu besar (maksimal 5MB per foto)
-- Kompres foto menggunakan tools online seperti TinyPNG
+# Run normally
+npm start
+```
 
-### Gallery 3D tidak render
+## 📦 Production Deployment
 
-- **Solusi**: Pastikan browser mendukung WebGL
-- Test di https://get.webgl.org/
+### Using Docker
 
-### Data hilang setelah clear browser
+1. Update `docker-compose.yml` for production
+2. Set environment variables
+3. Configure reverse proxy (nginx/caddy) if needed
+4. Run: `docker-compose up -d`
 
-- **Solusi**: LocalStorage di-clear saat hapus browsing data
-- Backup foto secara manual atau gunakan export feature (bisa ditambahkan)
+### Using PM2
 
-### Performance lambat dengan banyak foto
+```bash
+npm install -g pm2
+pm2 start server.js --name anniversary-gallery
+pm2 save
+pm2 startup
+```
 
-- **Solusi**: Batasi jumlah foto maksimal 20-30 foto
-- Kompres foto sebelum upload
-- Gunakan resolusi yang lebih kecil (1920x1080 atau lebih rendah)
+## 🎯 Environment Variables
 
-### Deploy di Coolify gagal
+Create `.env` file (optional):
+```env
+PORT=3000
+ADMIN_KEY=your-secret-key
+NODE_ENV=production
+```
 
-- **Solusi**:
-  - Cek logs di Coolify dashboard
-  - Pastikan port tidak bentrok
-  - Verifikasi Dockerfile syntax
+## 📝 License
 
-## 📊 Performance Tips
+ISC
 
-1. **Optimasi Foto**:
+## 🙏 Credits
 
-   - Ukuran maksimal: 5MB per foto
-   - Resolusi recommended: 1920x1080px
-   - Format: JPG (lebih kecil dari PNG)
-
-2. **Jumlah Foto**:
-
-   - Optimal: 10-20 foto
-   - Maksimal recommended: 30 foto
-   - Lebih dari 30 foto bisa memperlambat rendering
-
-3. **Browser Cache**:
-   - Foto di-cache otomatis di browser
-   - First load mungkin lambat, subsequent load lebih cepat
-
-## 🚧 Roadmap & Future Features
-
-- [ ] Export/Import data sebagai JSON
-- [ ] Tema warna yang bisa dikustomisasi
-- [ ] Background music player
-- [ ] Slideshow mode (auto-play)
-- [ ] Sharing via link (dengan backend support)
-- [ ] Mobile app version (React Native)
-- [ ] Video support
-- [ ] Collaborative mode (multiple users)
-
-## 🤝 Contributing
-
-Kontribusi sangat diterima! Untuk berkontribusi:
-
-1. Fork repository ini
-2. Buat branch baru (`git checkout -b feature/AmazingFeature`)
-3. Commit perubahan (`git commit -m 'Add some AmazingFeature'`)
-4. Push ke branch (`git push origin feature/AmazingFeature`)
-5. Buat Pull Request
-
-## 📄 License
-
-Project ini menggunakan MIT License - lihat file LICENSE untuk detail.
-
-## 👨‍💻 Author
-
-Dibuat dengan ❤️ untuk anniversary special
-
-## 🙏 Acknowledgments
-
-- Three.js untuk 3D rendering engine yang powerful
-- React untuk UI framework
-- Nginx untuk web server yang reliable
-- Coolify untuk self-hosted deployment platform
-
-## 📞 Support
-
-Jika ada pertanyaan atau issue:
-
-1. Buka issue di GitHub repository
-2. Atau hubungi via email
+- **Three.js** - 3D rendering
+- **Express** - Web server
+- **React** - UI components
 
 ---
 
-**Happy Anniversary! 🎊💕**
-
-Made with love for celebrating special moments together.
+Made with ❤️ for celebrating special moments

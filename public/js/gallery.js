@@ -1,172 +1,8 @@
-<!DOCTYPE html>
-<html lang="id">
+// Gallery Application - React Components
+const { useState, useEffect, useRef } = React;
 
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Anniversary Gallery 3D</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-            overflow: hidden;
-        }
-
-        #root {
-            width: 100vw;
-            height: 100vh;
-        }
-
-        @keyframes float {
-
-            0%,
-            100% {
-                transform: translateY(0px) rotate(0deg);
-            }
-
-            25% {
-                transform: translateY(-20px) rotate(5deg);
-            }
-
-            50% {
-                transform: translateY(-40px) rotate(-5deg);
-            }
-
-            75% {
-                transform: translateY(-20px) rotate(5deg);
-            }
-        }
-
-        @keyframes twinkle {
-
-            0%,
-            100% {
-                opacity: 0.3;
-                transform: scale(1);
-            }
-
-            50% {
-                opacity: 1;
-                transform: scale(1.5);
-            }
-        }
-    </style>
-</head>
-
-<body>
-    <div id="root"></div>
-
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-
-    <script type="text/babel">
-        const { useState, useEffect, useRef, Suspense } = React;
-
-        // IndexedDB Storage (supports much larger data than localStorage)
-        class IndexedDBStorage {
-            constructor() {
-                this.dbName = 'AnniversaryGalleryDB';
-                this.storeName = 'photos';
-                this.dbVersion = 1;
-            }
-
-            async initDB() {
-                return new Promise((resolve, reject) => {
-                    const request = indexedDB.open(this.dbName, this.dbVersion);
-
-                    request.onerror = () => reject(request.error);
-                    request.onsuccess = () => resolve(request.result);
-
-                    request.onupgradeneeded = (event) => {
-                        const db = event.target.result;
-                        if (!db.objectStoreNames.contains(this.storeName)) {
-                            db.createObjectStore(this.storeName, { keyPath: 'key' });
-                        }
-                    };
-                });
-            }
-
-            async get(key) {
-                const db = await this.initDB();
-                return new Promise((resolve, reject) => {
-                    const transaction = db.transaction([this.storeName], 'readonly');
-                    const store = transaction.objectStore(this.storeName);
-                    const request = store.get(key);
-
-                    request.onerror = () => reject(request.error);
-                    request.onsuccess = () => {
-                        const result = request.result;
-                        resolve(result ? { key: result.key, value: result.value } : null);
-                    };
-                });
-            }
-
-            async set(key, value) {
-                const db = await this.initDB();
-                return new Promise((resolve, reject) => {
-                    const transaction = db.transaction([this.storeName], 'readwrite');
-                    const store = transaction.objectStore(this.storeName);
-                    const request = store.put({ key, value });
-
-                    request.onerror = () => reject(request.error);
-                    request.onsuccess = () => resolve({ key, value });
-                });
-            }
-
-            async delete(key) {
-                const db = await this.initDB();
-                return new Promise((resolve, reject) => {
-                    const transaction = db.transaction([this.storeName], 'readwrite');
-                    const store = transaction.objectStore(this.storeName);
-                    const request = store.delete(key);
-
-                    request.onerror = () => reject(request.error);
-                    request.onsuccess = () => resolve({ key, deleted: true });
-                });
-            }
-        }
-
-        // Initialize storage
-        if (!window.storage) {
-            window.storage = new IndexedDBStorage();
-        }
-
-        // Image compression utility
-        function compressImage(dataUrl, maxWidth = 1920, quality = 0.8) {
-            return new Promise((resolve) => {
-                const img = new Image();
-                img.onload = () => {
-                    const canvas = document.createElement('canvas');
-                    let width = img.width;
-                    let height = img.height;
-
-                    // Calculate new dimensions while maintaining aspect ratio
-                    if (width > maxWidth) {
-                        height = (height * maxWidth) / width;
-                        width = maxWidth;
-                    }
-
-                    canvas.width = width;
-                    canvas.height = height;
-
-                    const ctx = canvas.getContext('2d');
-                    ctx.drawImage(img, 0, 0, width, height);
-
-                    // Compress to JPEG with quality setting
-                    resolve(canvas.toDataURL('image/jpeg', quality));
-                };
-                img.src = dataUrl;
-            });
-        }
-
-        // Simple Canvas Component
+        
+// Simple Canvas Component
         function Canvas({ children, style }) {
             const canvasRef = useRef();
             const sceneRef = useRef();
@@ -374,12 +210,17 @@
         }
 
         // Scene Component
-        function Scene({ photos, activeIndex, onPhotoClick, scene, camera }) {
+        function Scene({ photos, activeIndex, onPhotoClick, scene, camera, onNavigate }) {
             const controlsRef = useRef();
             const isDragging = useRef(false);
+            const isCtrlPressed = useRef(false);
             const previousMousePosition = useRef({ x: 0, y: 0 });
             const initialPinchDistance = useRef(null);
             const viewingDistanceRef = useRef(8);
+
+            // Swipe detection
+            const swipeStartRef = useRef(null);
+            const swipeTimeRef = useRef(0);
 
             // Orbit camera state
             const targetRef = useRef(new THREE.Vector3(0, 0, 0)); // What we're looking at
@@ -414,7 +255,11 @@
 
                 const handleMouseDown = (e) => {
                     isDragging.current = true;
+                    isCtrlPressed.current = e.ctrlKey || e.metaKey; // metaKey for Mac Cmd
                     previousMousePosition.current = { x: e.clientX, y: e.clientY };
+                    swipeStartRef.current = { x: e.clientX, y: e.clientY };
+                    swipeTimeRef.current = Date.now();
+                    document.body.style.cursor = 'grabbing';
                 };
 
                 const handleMouseMove = (e) => {
@@ -422,12 +267,29 @@
                         const deltaX = e.clientX - previousMousePosition.current.x;
                         const deltaY = e.clientY - previousMousePosition.current.y;
 
-                        // Rotate camera (orbit controls)
-                        sphericalRef.current.theta -= deltaX * 0.005; // Horizontal rotation
-                        sphericalRef.current.phi -= deltaY * 0.005;   // Vertical rotation
+                        if (isCtrlPressed.current) {
+                            // Ctrl + drag: Orbit controls (rotate camera around target)
+                            sphericalRef.current.theta -= deltaX * 0.005; // Horizontal rotation
+                            sphericalRef.current.phi -= deltaY * 0.005;   // Vertical rotation
 
-                        // Clamp vertical angle to prevent flipping
-                        sphericalRef.current.phi = Math.max(0.1, Math.min(Math.PI - 0.1, sphericalRef.current.phi));
+                            // Clamp vertical angle to prevent flipping
+                            sphericalRef.current.phi = Math.max(0.1, Math.min(Math.PI - 0.1, sphericalRef.current.phi));
+                        } else {
+                            // Regular drag: Pan controls (move the target/focal point)
+                            const panSpeed = 0.01;
+
+                            // Get camera's right and up vectors for proper panning
+                            const cameraRight = new THREE.Vector3();
+                            const cameraUp = new THREE.Vector3();
+
+                            camera.getWorldDirection(cameraRight);
+                            cameraRight.cross(camera.up).normalize();
+                            cameraUp.copy(camera.up).normalize();
+
+                            // Pan the target
+                            targetRef.current.addScaledVector(cameraRight, -deltaX * panSpeed * sphericalRef.current.radius * 0.1);
+                            targetRef.current.addScaledVector(cameraUp, deltaY * panSpeed * sphericalRef.current.radius * 0.1);
+                        }
 
                         updateCameraPosition();
 
@@ -435,8 +297,33 @@
                     }
                 };
 
-                const handleMouseUp = () => {
+                const handleMouseUp = (e) => {
+                    if (swipeStartRef.current) {
+                        const swipeEnd = { x: e.clientX, y: e.clientY };
+                        const deltaX = swipeEnd.x - swipeStartRef.current.x;
+                        const deltaY = swipeEnd.y - swipeStartRef.current.y;
+                        const swipeTime = Date.now() - swipeTimeRef.current;
+
+                        // Check if it's a swipe (quick, mostly horizontal movement)
+                        const isHorizontalSwipe = Math.abs(deltaX) > Math.abs(deltaY) * 2; // More horizontal than vertical
+                        const isQuickSwipe = swipeTime < 300; // Less than 300ms
+                        const isLongEnoughSwipe = Math.abs(deltaX) > 50; // At least 50px
+
+                        if (isHorizontalSwipe && isQuickSwipe && isLongEnoughSwipe && onNavigate) {
+                            if (deltaX > 0) {
+                                // Swipe right = previous
+                                onNavigate('prev');
+                            } else {
+                                // Swipe left = next
+                                onNavigate('next');
+                            }
+                        }
+
+                        swipeStartRef.current = null;
+                    }
                     isDragging.current = false;
+                    // Restore cursor based on Ctrl key state
+                    document.body.style.cursor = (e.ctrlKey || e.metaKey) ? 'grab' : 'move';
                 };
 
                 const handleClick = (e) => {
@@ -458,12 +345,21 @@
 
                 const handleWheel = (e) => {
                     e.preventDefault();
-                    // Zoom by changing radius
-                    sphericalRef.current.radius += e.deltaY * 0.01;
-                    sphericalRef.current.radius = Math.max(1, Math.min(20, sphericalRef.current.radius));
 
-                    viewingDistanceRef.current = sphericalRef.current.radius;
-                    updateCameraPosition();
+                    // Free zoom: move camera forward/backward in viewing direction
+                    // This allows passing through photos and exploring the space
+                    const zoomSpeed = 0.5;
+                    const direction = new THREE.Vector3();
+                    camera.getWorldDirection(direction);
+                    direction.normalize();
+
+                    // Move camera forward (negative deltaY) or backward (positive deltaY)
+                    const zoomDelta = -e.deltaY * zoomSpeed * 0.01;
+                    camera.position.addScaledVector(direction, zoomDelta);
+
+                    // Also update the spherical radius to match the new distance from target
+                    const distanceToTarget = camera.position.distanceTo(targetRef.current);
+                    sphericalRef.current.radius = distanceToTarget;
                 };
 
                 // Touch support with pinch-to-zoom
@@ -477,9 +373,12 @@
                     if (e.touches.length === 1) {
                         isDragging.current = true;
                         previousMousePosition.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+                        swipeStartRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+                        swipeTimeRef.current = Date.now();
                     } else if (e.touches.length === 2) {
                         // Pinch gesture started
                         isDragging.current = false;
+                        swipeStartRef.current = null;
                         initialPinchDistance.current = getTouchDistance(e.touches[0], e.touches[1]);
                     }
                 };
@@ -488,16 +387,24 @@
                     e.preventDefault();
 
                     if (e.touches.length === 1 && isDragging.current) {
-                        // Single finger drag - rotate the camera
+                        // Single finger drag - pan the camera (move around the space)
                         const deltaX = e.touches[0].clientX - previousMousePosition.current.x;
                         const deltaY = e.touches[0].clientY - previousMousePosition.current.y;
 
-                        // Rotate camera (orbit controls)
-                        sphericalRef.current.theta -= deltaX * 0.005;
-                        sphericalRef.current.phi -= deltaY * 0.005;
+                        // Pan controls (move the target/focal point)
+                        const panSpeed = 0.01;
 
-                        // Clamp vertical angle
-                        sphericalRef.current.phi = Math.max(0.1, Math.min(Math.PI - 0.1, sphericalRef.current.phi));
+                        // Get camera's right and up vectors for proper panning
+                        const cameraRight = new THREE.Vector3();
+                        const cameraUp = new THREE.Vector3();
+
+                        camera.getWorldDirection(cameraRight);
+                        cameraRight.cross(camera.up).normalize();
+                        cameraUp.copy(camera.up).normalize();
+
+                        // Pan the target
+                        targetRef.current.addScaledVector(cameraRight, -deltaX * panSpeed * sphericalRef.current.radius * 0.1);
+                        targetRef.current.addScaledVector(cameraUp, deltaY * panSpeed * sphericalRef.current.radius * 0.1);
 
                         updateCameraPosition();
 
@@ -507,20 +414,64 @@
                         const currentDistance = getTouchDistance(e.touches[0], e.touches[1]);
                         const delta = initialPinchDistance.current - currentDistance;
 
-                        // Zoom by changing radius
-                        sphericalRef.current.radius += delta * 0.01;
-                        sphericalRef.current.radius = Math.max(1, Math.min(20, sphericalRef.current.radius));
+                        // Free zoom: move camera forward/backward in viewing direction
+                        const zoomSpeed = 0.5;
+                        const direction = new THREE.Vector3();
+                        camera.getWorldDirection(direction);
+                        direction.normalize();
 
-                        viewingDistanceRef.current = sphericalRef.current.radius;
-                        updateCameraPosition();
+                        // Move camera (pinch in = zoom in/forward, pinch out = zoom out/backward)
+                        const zoomDelta = -delta * zoomSpeed * 0.001;
+                        camera.position.addScaledVector(direction, zoomDelta);
+
+                        // Update the spherical radius to match the new distance from target
+                        const distanceToTarget = camera.position.distanceTo(targetRef.current);
+                        sphericalRef.current.radius = distanceToTarget;
 
                         initialPinchDistance.current = currentDistance;
                     }
                 };
 
-                const handleTouchEnd = () => {
+                const handleTouchEnd = (e) => {
+                    if (swipeStartRef.current && e.changedTouches.length > 0) {
+                        const touch = e.changedTouches[0];
+                        const swipeEnd = { x: touch.clientX, y: touch.clientY };
+                        const deltaX = swipeEnd.x - swipeStartRef.current.x;
+                        const deltaY = swipeEnd.y - swipeStartRef.current.y;
+                        const swipeTime = Date.now() - swipeTimeRef.current;
+
+                        // Check if it's a swipe (quick, mostly horizontal movement)
+                        const isHorizontalSwipe = Math.abs(deltaX) > Math.abs(deltaY) * 2;
+                        const isQuickSwipe = swipeTime < 300;
+                        const isLongEnoughSwipe = Math.abs(deltaX) > 50;
+
+                        if (isHorizontalSwipe && isQuickSwipe && isLongEnoughSwipe && onNavigate) {
+                            if (deltaX > 0) {
+                                // Swipe right = previous
+                                onNavigate('prev');
+                            } else {
+                                // Swipe left = next
+                                onNavigate('next');
+                            }
+                        }
+
+                        swipeStartRef.current = null;
+                    }
                     isDragging.current = false;
                     initialPinchDistance.current = null;
+                };
+
+                // Keyboard events for Ctrl key detection
+                const handleKeyDown = (e) => {
+                    if (e.ctrlKey || e.metaKey) {
+                        document.body.style.cursor = 'grab';
+                    }
+                };
+
+                const handleKeyUp = (e) => {
+                    if (!e.ctrlKey && !e.metaKey) {
+                        document.body.style.cursor = isDragging.current ? 'grabbing' : 'move';
+                    }
                 };
 
                 document.addEventListener('mousedown', handleMouseDown);
@@ -531,6 +482,11 @@
                 document.addEventListener('touchstart', handleTouchStart, { passive: false });
                 document.addEventListener('touchmove', handleTouchMove, { passive: false });
                 document.addEventListener('touchend', handleTouchEnd, { passive: true });
+                document.addEventListener('keydown', handleKeyDown);
+                document.addEventListener('keyup', handleKeyUp);
+
+                // Set initial cursor
+                document.body.style.cursor = 'move';
 
                 return () => {
                     document.removeEventListener('mousedown', handleMouseDown);
@@ -541,36 +497,14 @@
                     document.removeEventListener('touchstart', handleTouchStart);
                     document.removeEventListener('touchmove', handleTouchMove);
                     document.removeEventListener('touchend', handleTouchEnd);
+                    document.removeEventListener('keydown', handleKeyDown);
+                    document.removeEventListener('keyup', handleKeyUp);
+                    document.body.style.cursor = 'default';
                 };
             }, [scene, camera, onPhotoClick]);
 
-            useEffect(() => {
-                if (activeIndex !== null && photos[activeIndex] && camera) {
-                    console.log('Moving camera to photo', activeIndex, 'at position', photos[activeIndex].position);
-                    const newTarget = new THREE.Vector3(...photos[activeIndex].position);
-                    const startTarget = targetRef.current.clone();
-
-                    const duration = 800;
-                    const start = Date.now();
-
-                    const animate = () => {
-                        const elapsed = Date.now() - start;
-                        const progress = Math.min(elapsed / duration, 1);
-                        const eased = 1 - Math.pow(1 - progress, 3);
-
-                        // Smoothly move the target
-                        targetRef.current.lerpVectors(startTarget, newTarget, eased);
-                        updateCameraPosition();
-
-                        if (progress < 1) {
-                            requestAnimationFrame(animate);
-                        } else {
-                            console.log('Camera animation complete. Looking at:', targetRef.current);
-                        }
-                    };
-                    animate();
-                }
-            }, [activeIndex, photos, camera]);
+            // Removed auto-camera animation to active photo
+            // This allows free exploration without snapping back to active image
 
             return (
                 <>
@@ -588,326 +522,38 @@
             );
         }
 
-        // Admin Page Component
-        function AdminPage({ photos, setPhotos, setShowAdmin }) {
-            const [caption, setCaption] = useState('');
-            const [imageData, setImageData] = useState('');
-            const [editingId, setEditingId] = useState(null);
-            const [isCompressing, setIsCompressing] = useState(false);
-            const [isSaving, setIsSaving] = useState(false);
+        
 
-            const handleImageChange = async (e) => {
-                const file = e.target.files[0];
-                if (file) {
-                    setIsCompressing(true);
-                    const reader = new FileReader();
-                    reader.onloadend = async () => {
-                        try {
-                            // Compress the image before storing
-                            const compressed = await compressImage(reader.result, 1920, 0.85);
-                            setImageData(compressed);
-                        } catch (error) {
-                            console.error('Error compressing image:', error);
-                            alert('Gagal mengompres gambar. Silakan coba lagi.');
-                        } finally {
-                            setIsCompressing(false);
-                        }
-                    };
-                    reader.readAsDataURL(file);
-                }
-            };
-
-            const generateRandomPosition = () => {
-                return [
-                    (Math.random() - 0.5) * 10,
-                    (Math.random() - 0.5) * 6,
-                    (Math.random() - 0.5) * 8
-                ];
-            };
-
-            const generateRandomRotation = () => {
-                return [
-                    (Math.random() - 0.5) * 0.3,
-                    (Math.random() - 0.5) * 0.5,
-                    0
-                ];
-            };
-
-            const handleSave = async () => {
-                if (!imageData) {
-                    alert('Silakan pilih gambar terlebih dahulu');
-                    return;
-                }
-
-                setIsSaving(true);
-                try {
-                    const newPhoto = {
-                        id: editingId || Date.now().toString(),
-                        image: imageData,
-                        caption: caption,
-                        position: generateRandomPosition(),
-                        rotation: generateRandomRotation()
-                    };
-
-                    let updatedPhotos;
-                    if (editingId) {
-                        updatedPhotos = photos.map(p => p.id === editingId ? newPhoto : p);
-                    } else {
-                        updatedPhotos = [...photos, newPhoto];
-                    }
-
-                    setPhotos(updatedPhotos);
-                    await window.storage.set('anniversary-photos', JSON.stringify(updatedPhotos));
-
-                    setCaption('');
-                    setImageData('');
-                    setEditingId(null);
-
-                    alert('Foto berhasil disimpan!');
-                } catch (error) {
-                    console.error('Error saving photo:', error);
-                    alert('Gagal menyimpan foto. Silakan coba lagi atau gunakan gambar yang lebih kecil.');
-                } finally {
-                    setIsSaving(false);
-                }
-            };
-
-            const handleEdit = (photo) => {
-                setEditingId(photo.id);
-                setCaption(photo.caption);
-                setImageData(photo.image);
-            };
-
-            const handleDelete = async (id) => {
-                if (confirm('Hapus foto ini?')) {
-                    const updatedPhotos = photos.filter(p => p.id !== id);
-                    setPhotos(updatedPhotos);
-                    await window.storage.set('anniversary-photos', JSON.stringify(updatedPhotos));
-                }
-            };
-
-            return (
-                <div style={{
-                    padding: '20px',
-                    maxWidth: '800px',
-                    margin: '0 auto',
-                    backgroundColor: '#1a1a1a',
-                    minHeight: '100vh',
-                    color: 'white'
-                }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' }}>
-                        <h2 style={{ margin: 0 }}>Kelola Gallery</h2>
-                        <button
-                            onClick={() => setShowAdmin(false)}
-                            style={{
-                                padding: '10px 20px',
-                                backgroundColor: '#444',
-                                color: 'white',
-                                border: 'none',
-                                borderRadius: '5px',
-                                cursor: 'pointer'
-                            }}
-                        >
-                            Kembali ke Gallery
-                        </button>
-                    </div>
-
-                    <div style={{
-                        backgroundColor: '#2a2a2a',
-                        padding: '20px',
-                        borderRadius: '10px',
-                        marginBottom: '30px'
-                    }}>
-                        <h3>{editingId ? 'Edit Foto' : 'Tambah Foto Baru'}</h3>
-
-                        <div style={{ marginBottom: '15px' }}>
-                            <label style={{ display: 'block', marginBottom: '5px' }}>Upload Gambar:</label>
-                            <input
-                                type="file"
-                                accept="image/*"
-                                onChange={handleImageChange}
-                                disabled={isCompressing || isSaving}
-                                style={{ width: '100%', padding: '10px' }}
-                            />
-                            {isCompressing && (
-                                <p style={{ color: '#ffc107', marginTop: '10px' }}>⏳ Mengompres gambar...</p>
-                            )}
-                        </div>
-
-                        {imageData && (
-                            <div style={{ marginBottom: '15px' }}>
-                                <img src={imageData} alt="Preview" style={{ maxWidth: '200px', borderRadius: '5px' }} />
-                            </div>
-                        )}
-
-                        <div style={{ marginBottom: '15px' }}>
-                            <label style={{ display: 'block', marginBottom: '5px' }}>Caption:</label>
-                            <input
-                                type="text"
-                                value={caption}
-                                onChange={(e) => setCaption(e.target.value)}
-                                placeholder="Masukkan caption untuk foto..."
-                                style={{
-                                    width: '100%',
-                                    padding: '10px',
-                                    borderRadius: '5px',
-                                    border: '1px solid #444',
-                                    backgroundColor: '#333',
-                                    color: 'white'
-                                }}
-                            />
-                        </div>
-
-                        <button
-                            onClick={handleSave}
-                            disabled={isCompressing || isSaving}
-                            style={{
-                                padding: '12px 30px',
-                                backgroundColor: (isCompressing || isSaving) ? '#666' : '#007bff',
-                                color: 'white',
-                                border: 'none',
-                                borderRadius: '5px',
-                                cursor: (isCompressing || isSaving) ? 'not-allowed' : 'pointer',
-                                marginRight: '10px',
-                                opacity: (isCompressing || isSaving) ? 0.7 : 1
-                            }}
-                        >
-                            {isSaving ? '💾 Menyimpan...' : (editingId ? 'Update' : 'Simpan')}
-                        </button>
-
-                        {editingId && (
-                            <button
-                                onClick={() => {
-                                    setEditingId(null);
-                                    setCaption('');
-                                    setImageData('');
-                                }}
-                                style={{
-                                    padding: '12px 30px',
-                                    backgroundColor: '#666',
-                                    color: 'white',
-                                    border: 'none',
-                                    borderRadius: '5px',
-                                    cursor: 'pointer'
-                                }}
-                            >
-                                Batal
-                            </button>
-                        )}
-                    </div>
-
-                    <div>
-                        <h3>Daftar Foto ({photos.length})</h3>
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '15px' }}>
-                            {photos.map(photo => (
-                                <div key={photo.id} style={{
-                                    backgroundColor: '#2a2a2a',
-                                    padding: '10px',
-                                    borderRadius: '8px'
-                                }}>
-                                    <img
-                                        src={photo.image}
-                                        alt={photo.caption}
-                                        style={{
-                                            width: '100%',
-                                            height: '150px',
-                                            objectFit: 'cover',
-                                            borderRadius: '5px',
-                                            marginBottom: '10px'
-                                        }}
-                                    />
-                                    <p style={{ margin: '5px 0', fontSize: '14px' }}>{photo.caption || 'Tanpa caption'}</p>
-                                    <div style={{ display: 'flex', gap: '5px', marginTop: '10px' }}>
-                                        <button
-                                            onClick={() => handleEdit(photo)}
-                                            style={{
-                                                flex: 1,
-                                                padding: '8px',
-                                                backgroundColor: '#ffc107',
-                                                color: '#000',
-                                                border: 'none',
-                                                borderRadius: '4px',
-                                                cursor: 'pointer',
-                                                fontSize: '12px'
-                                            }}
-                                        >
-                                            Edit
-                                        </button>
-                                        <button
-                                            onClick={() => handleDelete(photo.id)}
-                                            style={{
-                                                flex: 1,
-                                                padding: '8px',
-                                                backgroundColor: '#dc3545',
-                                                color: 'white',
-                                                border: 'none',
-                                                borderRadius: '4px',
-                                                cursor: 'pointer',
-                                                fontSize: '12px'
-                                            }}
-                                        >
-                                            Hapus
-                                        </button>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                </div>
-            );
-        }
-
-        // Main App Component
+// Main App Component
         function App() {
             const [photos, setPhotos] = useState([]);
             const [activeIndex, setActiveIndex] = useState(null);
-            const [showAdmin, setShowAdmin] = useState(false);
+            
             const [loading, setLoading] = useState(true);
 
             useEffect(() => {
-                // Check for admin access via URL parameter
-                const urlParams = new URLSearchParams(window.location.search);
-                if (urlParams.get('admin') === 'aryy') {
-                    setShowAdmin(true);
-                }
+                
                 loadPhotos();
             }, []);
 
             const loadPhotos = async () => {
-                try {
-                    // Try to get from IndexedDB first
-                    let result = await window.storage.get('anniversary-photos');
-
-                    // If not in IndexedDB, check localStorage for migration
-                    if (!result || !result.value) {
-                        const localStorageData = localStorage.getItem('anniversary-photos');
-                        if (localStorageData) {
-                            console.log('Migrating data from localStorage to IndexedDB...');
-                            await window.storage.set('anniversary-photos', localStorageData);
-                            localStorage.removeItem('anniversary-photos');
-                            result = { value: localStorageData };
-                        }
-                    }
-
-                    if (result && result.value) {
-                        const loadedPhotos = JSON.parse(result.value);
-                        console.log('Loaded photos:', loadedPhotos.length);
-                        setPhotos(loadedPhotos);
-                        // Auto-show first photo on load
-                        if (loadedPhotos.length > 0) {
-                            setTimeout(() => {
-                                console.log('Setting active index to 0');
-                                setActiveIndex(0);
-                            }, 100);
-                        }
-                    } else {
-                        console.log('No photos in storage');
-                    }
-                } catch (error) {
-                    console.log('Error loading photos:', error);
-                }
-                setLoading(false);
-            };
+        try {
+            const loadedPhotos = await GalleryAPI.getPhotos();
+            console.log('Loaded photos from server:', loadedPhotos.length);
+            setPhotos(loadedPhotos);
+            
+            // Auto-show first photo on load
+            if (loadedPhotos.length > 0) {
+                setTimeout(() => {
+                    console.log('Setting active index to 0');
+                    setActiveIndex(0);
+                }, 100);
+            }
+        } catch (error) {
+            console.log('Error loading photos:', error);
+        }
+        setLoading(false);
+    };
 
             const handleNext = () => {
                 if (photos.length === 0) return;
@@ -949,10 +595,6 @@
                 );
             }
 
-            if (showAdmin) {
-                return <AdminPage photos={photos} setPhotos={setPhotos} setShowAdmin={setShowAdmin} />;
-            }
-
             return (
                 <div style={{ width: '100vw', height: '100vh', position: 'relative', backgroundColor: '#000' }}>
                     {photos.length === 0 ? (
@@ -966,8 +608,8 @@
                             gap: '20px'
                         }}>
                             <h2>Belum ada foto</h2>
-                            <button
-                                onClick={() => setShowAdmin(true)}
+                            <a
+                                href="/admin?admin=aryy"
                                 style={{
                                     padding: '15px 30px',
                                     backgroundColor: '#007bff',
@@ -975,11 +617,13 @@
                                     border: 'none',
                                     borderRadius: '5px',
                                     cursor: 'pointer',
-                                    fontSize: '16px'
+                                    fontSize: '16px',
+                                    textDecoration: 'none',
+                                    display: 'inline-block'
                                 }}
                             >
                                 Tambah Foto
-                            </button>
+                            </a>
                         </div>
                     ) : (
                         <>
@@ -1029,6 +673,13 @@
                                     photos={photos}
                                     activeIndex={activeIndex}
                                     onPhotoClick={setActiveIndex}
+                                    onNavigate={(direction) => {
+                                        if (direction === 'next') {
+                                            handleNext();
+                                        } else if (direction === 'prev') {
+                                            handlePrev();
+                                        }
+                                    }}
                                 />
                             </Canvas>
 
@@ -1089,6 +740,28 @@
                                     {activeIndex + 1} / {photos.length}
                                 </div>
                             )}
+
+                            {/* Controls Help */}
+                            <div style={{
+                                position: 'absolute',
+                                top: '70px',
+                                left: '20px',
+                                padding: '12px 16px',
+                                backgroundColor: 'rgba(0,0,0,0.4)',
+                                color: 'white',
+                                borderRadius: '10px',
+                                backdropFilter: 'blur(10px)',
+                                fontSize: '13px',
+                                lineHeight: '1.6',
+                                zIndex: 10,
+                                fontFamily: 'monospace'
+                            }}>
+                                <div><strong>Controls:</strong></div>
+                                <div>🖱️ Drag - Pan (move around)</div>
+                                <div>🖱️ Ctrl+Drag - Rotate view</div>
+                                <div>🔍 Scroll - Zoom in/out</div>
+                                <div>⌨️ ←/→ - Navigate photos</div>
+                            </div>
                         </>
                     )}
                 </div>
@@ -1097,7 +770,3 @@
 
         const root = ReactDOM.createRoot(document.getElementById('root'));
         root.render(<App />);
-    </script>
-</body>
-
-</html>
