@@ -379,10 +379,35 @@
             const isDragging = useRef(false);
             const previousMousePosition = useRef({ x: 0, y: 0 });
             const initialPinchDistance = useRef(null);
-            const viewingDistanceRef = useRef(5);
+            const viewingDistanceRef = useRef(8);
+
+            // Orbit camera state
+            const targetRef = useRef(new THREE.Vector3(0, 0, 0)); // What we're looking at
+            const sphericalRef = useRef({
+                radius: 8,
+                theta: 0,    // horizontal angle
+                phi: Math.PI / 2  // vertical angle (90 degrees = eye level)
+            });
+
+            // Update camera position from spherical coordinates
+            const updateCameraPosition = () => {
+                const { radius, theta, phi } = sphericalRef.current;
+                const target = targetRef.current;
+
+                // Convert spherical to cartesian coordinates
+                const x = target.x + radius * Math.sin(phi) * Math.sin(theta);
+                const y = target.y + radius * Math.cos(phi);
+                const z = target.z + radius * Math.sin(phi) * Math.cos(theta);
+
+                camera.position.set(x, y, z);
+                camera.lookAt(target);
+            };
 
             useEffect(() => {
                 if (!scene || !camera) return;
+
+                // Initialize camera position
+                updateCameraPosition();
 
                 const raycaster = new THREE.Raycaster();
                 const mouse = new THREE.Vector2();
@@ -397,9 +422,14 @@
                         const deltaX = e.clientX - previousMousePosition.current.x;
                         const deltaY = e.clientY - previousMousePosition.current.y;
 
-                        // Reverse direction for intuitive dragging
-                        camera.position.x -= deltaX * 0.01;
-                        camera.position.y += deltaY * 0.01;
+                        // Rotate camera (orbit controls)
+                        sphericalRef.current.theta -= deltaX * 0.005; // Horizontal rotation
+                        sphericalRef.current.phi -= deltaY * 0.005;   // Vertical rotation
+
+                        // Clamp vertical angle to prevent flipping
+                        sphericalRef.current.phi = Math.max(0.1, Math.min(Math.PI - 0.1, sphericalRef.current.phi));
+
+                        updateCameraPosition();
 
                         previousMousePosition.current = { x: e.clientX, y: e.clientY };
                     }
@@ -428,19 +458,12 @@
 
                 const handleWheel = (e) => {
                     e.preventDefault();
-                    // Simple zoom - just move camera forward/backward
-                    const zoomSpeed = e.deltaY * 0.01;
+                    // Zoom by changing radius
+                    sphericalRef.current.radius += e.deltaY * 0.01;
+                    sphericalRef.current.radius = Math.max(1, Math.min(20, sphericalRef.current.radius));
 
-                    // Get camera's forward direction
-                    const direction = new THREE.Vector3(0, 0, 1);
-                    direction.applyQuaternion(camera.quaternion);
-
-                    // Move camera along its viewing direction
-                    camera.position.addScaledVector(direction, zoomSpeed);
-
-                    // Update viewing distance for Next/Previous navigation
-                    viewingDistanceRef.current = camera.position.z;
-                    viewingDistanceRef.current = Math.max(1, Math.min(20, viewingDistanceRef.current));
+                    viewingDistanceRef.current = sphericalRef.current.radius;
+                    updateCameraPosition();
                 };
 
                 // Touch support with pinch-to-zoom
@@ -465,13 +488,18 @@
                     e.preventDefault();
 
                     if (e.touches.length === 1 && isDragging.current) {
-                        // Single finger drag - pan the camera
+                        // Single finger drag - rotate the camera
                         const deltaX = e.touches[0].clientX - previousMousePosition.current.x;
                         const deltaY = e.touches[0].clientY - previousMousePosition.current.y;
 
-                        // Reverse direction for intuitive dragging
-                        camera.position.x -= deltaX * 0.01;
-                        camera.position.y += deltaY * 0.01;
+                        // Rotate camera (orbit controls)
+                        sphericalRef.current.theta -= deltaX * 0.005;
+                        sphericalRef.current.phi -= deltaY * 0.005;
+
+                        // Clamp vertical angle
+                        sphericalRef.current.phi = Math.max(0.1, Math.min(Math.PI - 0.1, sphericalRef.current.phi));
+
+                        updateCameraPosition();
 
                         previousMousePosition.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
                     } else if (e.touches.length === 2 && initialPinchDistance.current !== null) {
@@ -479,16 +507,12 @@
                         const currentDistance = getTouchDistance(e.touches[0], e.touches[1]);
                         const delta = initialPinchDistance.current - currentDistance;
 
-                        // Get camera's forward direction
-                        const direction = new THREE.Vector3(0, 0, 1);
-                        direction.applyQuaternion(camera.quaternion);
+                        // Zoom by changing radius
+                        sphericalRef.current.radius += delta * 0.01;
+                        sphericalRef.current.radius = Math.max(1, Math.min(20, sphericalRef.current.radius));
 
-                        // Move camera along its viewing direction
-                        camera.position.addScaledVector(direction, delta * 0.01);
-
-                        // Update viewing distance for Next/Previous navigation
-                        viewingDistanceRef.current = camera.position.z;
-                        viewingDistanceRef.current = Math.max(1, Math.min(20, viewingDistanceRef.current));
+                        viewingDistanceRef.current = sphericalRef.current.radius;
+                        updateCameraPosition();
 
                         initialPinchDistance.current = currentDistance;
                     }
@@ -523,28 +547,25 @@
             useEffect(() => {
                 if (activeIndex !== null && photos[activeIndex] && camera) {
                     console.log('Moving camera to photo', activeIndex, 'at position', photos[activeIndex].position);
-                    const target = new THREE.Vector3(...photos[activeIndex].position);
-
-                    // Use stored viewing distance (preserves zoom level)
-                    const offset = new THREE.Vector3(0, 0, viewingDistanceRef.current);
-                    const newPosition = target.clone().add(offset);
+                    const newTarget = new THREE.Vector3(...photos[activeIndex].position);
+                    const startTarget = targetRef.current.clone();
 
                     const duration = 800;
                     const start = Date.now();
-                    const startPos = camera.position.clone();
 
                     const animate = () => {
                         const elapsed = Date.now() - start;
                         const progress = Math.min(elapsed / duration, 1);
                         const eased = 1 - Math.pow(1 - progress, 3);
 
-                        camera.position.lerpVectors(startPos, newPosition, eased);
-                        camera.lookAt(target);
+                        // Smoothly move the target
+                        targetRef.current.lerpVectors(startTarget, newTarget, eased);
+                        updateCameraPosition();
 
                         if (progress < 1) {
                             requestAnimationFrame(animate);
                         } else {
-                            console.log('Camera animation complete. Camera at:', camera.position, 'looking at:', target);
+                            console.log('Camera animation complete. Looking at:', targetRef.current);
                         }
                     };
                     animate();
