@@ -1,0 +1,704 @@
+<!DOCTYPE html>
+<html lang="id">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Anniversary Gallery 3D</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            overflow: hidden;
+        }
+
+        #root {
+            width: 100vw;
+            height: 100vh;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="root"></div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef, Suspense } = React;
+
+        // Storage Mock (for compatibility)
+        if (!window.storage) {
+            window.storage = {
+                async get(key) {
+                    const data = localStorage.getItem(key);
+                    return data ? { key, value: data } : null;
+                },
+                async set(key, value) {
+                    localStorage.setItem(key, value);
+                    return { key, value };
+                },
+                async delete(key) {
+                    localStorage.removeItem(key);
+                    return { key, deleted: true };
+                }
+            };
+        }
+
+        // Simple Canvas Component
+        function Canvas({ children, style }) {
+            const canvasRef = useRef();
+            const sceneRef = useRef();
+            const cameraRef = useRef();
+            const rendererRef = useRef();
+            const frameIdRef = useRef();
+
+            useEffect(() => {
+                const scene = new THREE.Scene();
+                const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+                const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+
+                renderer.setSize(window.innerWidth, window.innerHeight);
+                renderer.setClearColor(0x0a0a0a, 1);
+                canvasRef.current.appendChild(renderer.domElement);
+
+                camera.position.z = 8;
+
+                sceneRef.current = scene;
+                cameraRef.current = camera;
+                rendererRef.current = renderer;
+
+                const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+                scene.add(ambientLight);
+
+                const pointLight1 = new THREE.PointLight(0xffffff, 1);
+                pointLight1.position.set(10, 10, 10);
+                scene.add(pointLight1);
+
+                const pointLight2 = new THREE.PointLight(0xffffff, 0.5);
+                pointLight2.position.set(-10, -10, -10);
+                scene.add(pointLight2);
+
+                const handleResize = () => {
+                    camera.aspect = window.innerWidth / window.innerHeight;
+                    camera.updateProjectionMatrix();
+                    renderer.setSize(window.innerWidth, window.innerHeight);
+                };
+
+                window.addEventListener('resize', handleResize);
+
+                const animate = () => {
+                    frameIdRef.current = requestAnimationFrame(animate);
+                    renderer.render(scene, camera);
+                };
+                animate();
+
+                return () => {
+                    window.removeEventListener('resize', handleResize);
+                    cancelAnimationFrame(frameIdRef.current);
+                    renderer.dispose();
+                };
+            }, []);
+
+            return (
+                <div ref={canvasRef} style={style}>
+                    {React.Children.map(children, child =>
+                        React.cloneElement(child, { scene: sceneRef.current, camera: cameraRef.current })
+                    )}
+                </div>
+            );
+        }
+
+        // Photo Frame Component
+        function PhotoFrame({ photo, index, onClick, isActive, scene }) {
+            const meshRef = useRef();
+
+            useEffect(() => {
+                if (!scene) return;
+
+                const geometry = new THREE.PlaneGeometry(2, 1.5);
+                const loader = new THREE.TextureLoader();
+
+                loader.load(photo.image, (texture) => {
+                    const material = new THREE.MeshStandardMaterial({
+                        map: texture,
+                        emissive: isActive ? 0xffffff : 0x000000,
+                        emissiveIntensity: isActive ? 0.3 : 0
+                    });
+
+                    const mesh = new THREE.Mesh(geometry, material);
+                    mesh.position.set(...photo.position);
+                    mesh.rotation.set(...photo.rotation);
+                    mesh.userData = { photoId: photo.id, index };
+
+                    // Add border
+                    const edges = new THREE.EdgesGeometry(geometry);
+                    const lineMaterial = new THREE.LineBasicMaterial({
+                        color: isActive ? 0xffffff : 0x888888
+                    });
+                    const border = new THREE.LineSegments(edges, lineMaterial);
+                    mesh.add(border);
+
+                    meshRef.current = mesh;
+                    scene.add(mesh);
+                });
+
+                return () => {
+                    if (meshRef.current) {
+                        scene.remove(meshRef.current);
+                        meshRef.current.geometry.dispose();
+                        meshRef.current.material.dispose();
+                    }
+                };
+            }, [scene, photo, isActive]);
+
+            return null;
+        }
+
+        // Scene Component
+        function Scene({ photos, activeIndex, onPhotoClick, scene, camera }) {
+            const controlsRef = useRef();
+            const isDragging = useRef(false);
+            const previousMousePosition = useRef({ x: 0, y: 0 });
+
+            useEffect(() => {
+                if (!scene || !camera) return;
+
+                const raycaster = new THREE.Raycaster();
+                const mouse = new THREE.Vector2();
+
+                const handleMouseDown = (e) => {
+                    isDragging.current = true;
+                    previousMousePosition.current = { x: e.clientX, y: e.clientY };
+                };
+
+                const handleMouseMove = (e) => {
+                    if (isDragging.current) {
+                        const deltaX = e.clientX - previousMousePosition.current.x;
+                        const deltaY = e.clientY - previousMousePosition.current.y;
+
+                        camera.position.x += deltaX * 0.01;
+                        camera.position.y -= deltaY * 0.01;
+
+                        previousMousePosition.current = { x: e.clientX, y: e.clientY };
+                    }
+                };
+
+                const handleMouseUp = () => {
+                    isDragging.current = false;
+                };
+
+                const handleClick = (e) => {
+                    if (isDragging.current) return;
+
+                    mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+                    mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+
+                    raycaster.setFromCamera(mouse, camera);
+                    const intersects = raycaster.intersectObjects(scene.children, true);
+
+                    if (intersects.length > 0) {
+                        const object = intersects[0].object;
+                        if (object.userData.index !== undefined) {
+                            onPhotoClick(object.userData.index);
+                        }
+                    }
+                };
+
+                const handleWheel = (e) => {
+                    e.preventDefault();
+                    camera.position.z += e.deltaY * 0.01;
+                    camera.position.z = Math.max(3, Math.min(15, camera.position.z));
+                };
+
+                document.addEventListener('mousedown', handleMouseDown);
+                document.addEventListener('mousemove', handleMouseMove);
+                document.addEventListener('mouseup', handleMouseUp);
+                document.addEventListener('click', handleClick);
+                document.addEventListener('wheel', handleWheel, { passive: false });
+
+                return () => {
+                    document.removeEventListener('mousedown', handleMouseDown);
+                    document.removeEventListener('mousemove', handleMouseMove);
+                    document.removeEventListener('mouseup', handleMouseUp);
+                    document.removeEventListener('click', handleClick);
+                    document.removeEventListener('wheel', handleWheel);
+                };
+            }, [scene, camera, onPhotoClick]);
+
+            useEffect(() => {
+                if (activeIndex !== null && photos[activeIndex] && camera) {
+                    const target = new THREE.Vector3(...photos[activeIndex].position);
+                    const offset = new THREE.Vector3(0, 0, 3);
+                    const newPosition = target.clone().add(offset);
+
+                    const duration = 1000;
+                    const start = Date.now();
+                    const startPos = camera.position.clone();
+
+                    const animate = () => {
+                        const elapsed = Date.now() - start;
+                        const progress = Math.min(elapsed / duration, 1);
+                        const eased = 1 - Math.pow(1 - progress, 3);
+
+                        camera.position.lerpVectors(startPos, newPosition, eased);
+                        camera.lookAt(target);
+
+                        if (progress < 1) {
+                            requestAnimationFrame(animate);
+                        }
+                    };
+                    animate();
+                }
+            }, [activeIndex, photos, camera]);
+
+            return (
+                <>
+                    {photos.map((photo, index) => (
+                        <PhotoFrame
+                            key={photo.id}
+                            photo={photo}
+                            index={index}
+                            onClick={() => onPhotoClick(index)}
+                            isActive={activeIndex === index}
+                            scene={scene}
+                        />
+                    ))}
+                </>
+            );
+        }
+
+        // Admin Page Component
+        function AdminPage({ photos, setPhotos, setShowAdmin }) {
+            const [caption, setCaption] = useState('');
+            const [imageData, setImageData] = useState('');
+            const [editingId, setEditingId] = useState(null);
+
+            const handleImageChange = (e) => {
+                const file = e.target.files[0];
+                if (file) {
+                    const reader = new FileReader();
+                    reader.onloadend = () => {
+                        setImageData(reader.result);
+                    };
+                    reader.readAsDataURL(file);
+                }
+            };
+
+            const generateRandomPosition = () => {
+                return [
+                    (Math.random() - 0.5) * 10,
+                    (Math.random() - 0.5) * 6,
+                    (Math.random() - 0.5) * 8
+                ];
+            };
+
+            const generateRandomRotation = () => {
+                return [
+                    (Math.random() - 0.5) * 0.3,
+                    (Math.random() - 0.5) * 0.5,
+                    0
+                ];
+            };
+
+            const handleSave = async () => {
+                if (!imageData) {
+                    alert('Silakan pilih gambar terlebih dahulu');
+                    return;
+                }
+
+                const newPhoto = {
+                    id: editingId || Date.now().toString(),
+                    image: imageData,
+                    caption: caption,
+                    position: generateRandomPosition(),
+                    rotation: generateRandomRotation()
+                };
+
+                let updatedPhotos;
+                if (editingId) {
+                    updatedPhotos = photos.map(p => p.id === editingId ? newPhoto : p);
+                } else {
+                    updatedPhotos = [...photos, newPhoto];
+                }
+
+                setPhotos(updatedPhotos);
+                await window.storage.set('anniversary-photos', JSON.stringify(updatedPhotos));
+
+                setCaption('');
+                setImageData('');
+                setEditingId(null);
+            };
+
+            const handleEdit = (photo) => {
+                setEditingId(photo.id);
+                setCaption(photo.caption);
+                setImageData(photo.image);
+            };
+
+            const handleDelete = async (id) => {
+                if (confirm('Hapus foto ini?')) {
+                    const updatedPhotos = photos.filter(p => p.id !== id);
+                    setPhotos(updatedPhotos);
+                    await window.storage.set('anniversary-photos', JSON.stringify(updatedPhotos));
+                }
+            };
+
+            return (
+                <div style={{
+                    padding: '20px',
+                    maxWidth: '800px',
+                    margin: '0 auto',
+                    backgroundColor: '#1a1a1a',
+                    minHeight: '100vh',
+                    color: 'white'
+                }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' }}>
+                        <h2 style={{ margin: 0 }}>Kelola Gallery</h2>
+                        <button
+                            onClick={() => setShowAdmin(false)}
+                            style={{
+                                padding: '10px 20px',
+                                backgroundColor: '#444',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: '5px',
+                                cursor: 'pointer'
+                            }}
+                        >
+                            Kembali ke Gallery
+                        </button>
+                    </div>
+
+                    <div style={{
+                        backgroundColor: '#2a2a2a',
+                        padding: '20px',
+                        borderRadius: '10px',
+                        marginBottom: '30px'
+                    }}>
+                        <h3>{editingId ? 'Edit Foto' : 'Tambah Foto Baru'}</h3>
+
+                        <div style={{ marginBottom: '15px' }}>
+                            <label style={{ display: 'block', marginBottom: '5px' }}>Upload Gambar:</label>
+                            <input
+                                type="file"
+                                accept="image/*"
+                                onChange={handleImageChange}
+                                style={{ width: '100%', padding: '10px' }}
+                            />
+                        </div>
+
+                        {imageData && (
+                            <div style={{ marginBottom: '15px' }}>
+                                <img src={imageData} alt="Preview" style={{ maxWidth: '200px', borderRadius: '5px' }} />
+                            </div>
+                        )}
+
+                        <div style={{ marginBottom: '15px' }}>
+                            <label style={{ display: 'block', marginBottom: '5px' }}>Caption:</label>
+                            <input
+                                type="text"
+                                value={caption}
+                                onChange={(e) => setCaption(e.target.value)}
+                                placeholder="Masukkan caption untuk foto..."
+                                style={{
+                                    width: '100%',
+                                    padding: '10px',
+                                    borderRadius: '5px',
+                                    border: '1px solid #444',
+                                    backgroundColor: '#333',
+                                    color: 'white'
+                                }}
+                            />
+                        </div>
+
+                        <button
+                            onClick={handleSave}
+                            style={{
+                                padding: '12px 30px',
+                                backgroundColor: '#007bff',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: '5px',
+                                cursor: 'pointer',
+                                marginRight: '10px'
+                            }}
+                        >
+                            {editingId ? 'Update' : 'Simpan'}
+                        </button>
+
+                        {editingId && (
+                            <button
+                                onClick={() => {
+                                    setEditingId(null);
+                                    setCaption('');
+                                    setImageData('');
+                                }}
+                                style={{
+                                    padding: '12px 30px',
+                                    backgroundColor: '#666',
+                                    color: 'white',
+                                    border: 'none',
+                                    borderRadius: '5px',
+                                    cursor: 'pointer'
+                                }}
+                            >
+                                Batal
+                            </button>
+                        )}
+                    </div>
+
+                    <div>
+                        <h3>Daftar Foto ({photos.length})</h3>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '15px' }}>
+                            {photos.map(photo => (
+                                <div key={photo.id} style={{
+                                    backgroundColor: '#2a2a2a',
+                                    padding: '10px',
+                                    borderRadius: '8px'
+                                }}>
+                                    <img
+                                        src={photo.image}
+                                        alt={photo.caption}
+                                        style={{
+                                            width: '100%',
+                                            height: '150px',
+                                            objectFit: 'cover',
+                                            borderRadius: '5px',
+                                            marginBottom: '10px'
+                                        }}
+                                    />
+                                    <p style={{ margin: '5px 0', fontSize: '14px' }}>{photo.caption || 'Tanpa caption'}</p>
+                                    <div style={{ display: 'flex', gap: '5px', marginTop: '10px' }}>
+                                        <button
+                                            onClick={() => handleEdit(photo)}
+                                            style={{
+                                                flex: 1,
+                                                padding: '8px',
+                                                backgroundColor: '#ffc107',
+                                                color: '#000',
+                                                border: 'none',
+                                                borderRadius: '4px',
+                                                cursor: 'pointer',
+                                                fontSize: '12px'
+                                            }}
+                                        >
+                                            Edit
+                                        </button>
+                                        <button
+                                            onClick={() => handleDelete(photo.id)}
+                                            style={{
+                                                flex: 1,
+                                                padding: '8px',
+                                                backgroundColor: '#dc3545',
+                                                color: 'white',
+                                                border: 'none',
+                                                borderRadius: '4px',
+                                                cursor: 'pointer',
+                                                fontSize: '12px'
+                                            }}
+                                        >
+                                            Hapus
+                                        </button>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        // Main App Component
+        function App() {
+            const [photos, setPhotos] = useState([]);
+            const [activeIndex, setActiveIndex] = useState(null);
+            const [showAdmin, setShowAdmin] = useState(false);
+            const [loading, setLoading] = useState(true);
+
+            useEffect(() => {
+                loadPhotos();
+            }, []);
+
+            const loadPhotos = async () => {
+                try {
+                    const result = await window.storage.get('anniversary-photos');
+                    if (result && result.value) {
+                        setPhotos(JSON.parse(result.value));
+                    }
+                } catch (error) {
+                    console.log('No existing photos found');
+                }
+                setLoading(false);
+            };
+
+            const handleNext = () => {
+                if (photos.length === 0) return;
+                setActiveIndex((prev) => (prev === null ? 0 : (prev + 1) % photos.length));
+            };
+
+            const handlePrev = () => {
+                if (photos.length === 0) return;
+                setActiveIndex((prev) => (prev === null ? photos.length - 1 : (prev - 1 + photos.length) % photos.length));
+            };
+
+            useEffect(() => {
+                const handleKeyDown = (e) => {
+                    if (e.key === 'ArrowRight') handleNext();
+                    if (e.key === 'ArrowLeft') handlePrev();
+                };
+                window.addEventListener('keydown', handleKeyDown);
+                return () => window.removeEventListener('keydown', handleKeyDown);
+            }, [photos.length]);
+
+            if (loading) {
+                return (
+                    <div style={{
+                        display: 'flex',
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                        height: '100vh',
+                        backgroundColor: '#000',
+                        color: 'white'
+                    }}>Loading...</div>
+                );
+            }
+
+            if (showAdmin) {
+                return <AdminPage photos={photos} setPhotos={setPhotos} setShowAdmin={setShowAdmin} />;
+            }
+
+            return (
+                <div style={{ width: '100vw', height: '100vh', position: 'relative', backgroundColor: '#000' }}>
+                    {photos.length === 0 ? (
+                        <div style={{
+                            display: 'flex',
+                            flexDirection: 'column',
+                            justifyContent: 'center',
+                            alignItems: 'center',
+                            height: '100vh',
+                            color: 'white',
+                            gap: '20px'
+                        }}>
+                            <h2>Belum ada foto</h2>
+                            <button
+                                onClick={() => setShowAdmin(true)}
+                                style={{
+                                    padding: '15px 30px',
+                                    backgroundColor: '#007bff',
+                                    color: 'white',
+                                    border: 'none',
+                                    borderRadius: '5px',
+                                    cursor: 'pointer',
+                                    fontSize: '16px'
+                                }}
+                            >
+                                Tambah Foto
+                            </button>
+                        </div>
+                    ) : (
+                        <>
+                            <Canvas style={{ background: 'linear-gradient(to bottom, #0a0a0a, #1a1a2e)' }}>
+                                <Scene
+                                    photos={photos}
+                                    activeIndex={activeIndex}
+                                    onPhotoClick={setActiveIndex}
+                                />
+                            </Canvas>
+
+                            <div style={{
+                                position: 'absolute',
+                                bottom: '30px',
+                                left: '50%',
+                                transform: 'translateX(-50%)',
+                                display: 'flex',
+                                gap: '15px',
+                                zIndex: 10
+                            }}>
+                                <button
+                                    onClick={handlePrev}
+                                    style={{
+                                        padding: '12px 24px',
+                                        backgroundColor: 'rgba(255,255,255,0.2)',
+                                        color: 'white',
+                                        border: '2px solid white',
+                                        borderRadius: '50px',
+                                        cursor: 'pointer',
+                                        fontSize: '16px',
+                                        backdropFilter: 'blur(10px)'
+                                    }}
+                                >
+                                    ← Previous
+                                </button>
+                                <button
+                                    onClick={handleNext}
+                                    style={{
+                                        padding: '12px 24px',
+                                        backgroundColor: 'rgba(255,255,255,0.2)',
+                                        color: 'white',
+                                        border: '2px solid white',
+                                        borderRadius: '50px',
+                                        cursor: 'pointer',
+                                        fontSize: '16px',
+                                        backdropFilter: 'blur(10px)'
+                                    }}
+                                >
+                                    Next →
+                                </button>
+                            </div>
+
+                            <button
+                                onClick={() => setShowAdmin(true)}
+                                style={{
+                                    position: 'absolute',
+                                    top: '20px',
+                                    right: '20px',
+                                    padding: '10px 20px',
+                                    backgroundColor: 'rgba(255,255,255,0.2)',
+                                    color: 'white',
+                                    border: '2px solid white',
+                                    borderRadius: '50px',
+                                    cursor: 'pointer',
+                                    backdropFilter: 'blur(10px)',
+                                    zIndex: 10
+                                }}
+                            >
+                                ⚙️ Kelola Gallery
+                            </button>
+
+                            {activeIndex !== null && (
+                                <div style={{
+                                    position: 'absolute',
+                                    top: '20px',
+                                    left: '50%',
+                                    transform: 'translateX(-50%)',
+                                    padding: '10px 20px',
+                                    backgroundColor: 'rgba(0,0,0,0.5)',
+                                    color: 'white',
+                                    borderRadius: '20px',
+                                    backdropFilter: 'blur(10px)',
+                                    zIndex: 10
+                                }}>
+                                    {activeIndex + 1} / {photos.length}
+                                </div>
+                            )}
+                        </>
+                    )}
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+
+</html>
