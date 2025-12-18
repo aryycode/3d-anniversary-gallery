@@ -51,6 +51,64 @@ Access the gallery at: http://localhost:3000
    - Gallery: http://localhost:3000
    - Admin Panel: http://localhost:3000/admin?admin=aryy
 
+## ⚙️ Configuration
+
+### Port Configuration
+
+You can customize the port via environment variables:
+
+#### Method 1: Using .env file (Recommended)
+
+1. Copy the example file:
+   ```bash
+   cp .env.example .env
+   ```
+
+2. Edit `.env` and set your desired port:
+   ```env
+   HOST_PORT=8080    # Port on your host machine
+   PORT=3000         # Port inside container (usually keep as 3000)
+   ```
+
+3. Start with Docker Compose:
+   ```bash
+   docker-compose up -d
+   ```
+   Access at: http://localhost:8080
+
+#### Method 2: Command-line override
+
+**Docker Compose:**
+```bash
+# Run on port 8080
+HOST_PORT=8080 docker-compose up -d
+
+# Or set both ports
+HOST_PORT=8080 PORT=8080 docker-compose up -d
+```
+
+**Node.js directly:**
+```bash
+# Run on port 8080
+PORT=8080 npm start
+```
+
+**Docker run:**
+```bash
+# Build image
+docker build -t anniversary-gallery .
+
+# Run on custom port
+docker run -d -p 8080:3000 -e PORT=3000 -v $(pwd)/data:/app/data anniversary-gallery
+```
+
+#### Common Port Examples
+
+- **Default**: `PORT=3000` → http://localhost:3000
+- **Alternative**: `PORT=8080` → http://localhost:8080
+- **HTTP**: `PORT=80` → http://localhost (requires admin/sudo)
+- **Custom**: `PORT=5000` → http://localhost:5000
+
 ## 📁 File Structure
 
 ```
@@ -59,11 +117,12 @@ anniversary-gallery/
 ├── package.json              # Node.js dependencies
 ├── Dockerfile                # Docker container definition
 ├── docker-compose.yml        # Docker Compose configuration
+├── .env.example              # Environment variables template
 ├── .dockerignore             # Docker ignore rules
 ├── .gitignore                # Git ignore rules
 ├── README.md                 # This file
 ├── data/
-│   └── photos.json           # Photo storage (JSON format)
+│   └── photos.json           # Photo storage (auto-generated)
 └── public/
     ├── index.html            # Main gallery page
     ├── admin.html            # Admin panel page

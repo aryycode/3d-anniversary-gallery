@@ -6,7 +6,9 @@ services:
     container_name: anniversary-gallery
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      # Map host port to container port
+      # Override via environment: HOST_PORT=8080 docker-compose up
+      - "${HOST_PORT:-3000}:${PORT:-3000}"
     volumes:
       # Persist photo data
       - ./data:/app/data
@@ -14,8 +16,11 @@ services:
       # - ./server.js:/app/server.js
       # - ./public:/app/public
     environment:
-      - NODE_ENV=production
-      - PORT=3000
+      # Node environment
+      - NODE_ENV=${NODE_ENV:-production}
+      # Application port (inside container)
+      # Override via .env file or: PORT=8080 docker-compose up
+      - PORT=${PORT:-3000}
     networks:
       - gallery-network
 
