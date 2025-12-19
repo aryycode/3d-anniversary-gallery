@@ -268,13 +268,21 @@ const { useState, useEffect, useRef } = React;
                         const deltaY = e.clientY - previousMousePosition.current.y;
 
                         if (isCtrlPressed.current) {
-                            // Ctrl + drag: Orbit controls (rotate camera around target)
+                            // Ctrl + drag: Orbit controls (rotate view around current look-at point)
+                            // Update target to be a point in front of camera before rotating
+                            const direction = new THREE.Vector3();
+                            camera.getWorldDirection(direction);
+                            const currentDistance = sphericalRef.current.radius;
+                            targetRef.current.copy(camera.position).addScaledVector(direction, currentDistance);
+
+                            // Update spherical angles
                             sphericalRef.current.theta -= deltaX * 0.005; // Horizontal rotation
                             sphericalRef.current.phi -= deltaY * 0.005;   // Vertical rotation
 
                             // Clamp vertical angle to prevent flipping
                             sphericalRef.current.phi = Math.max(0.1, Math.min(Math.PI - 0.1, sphericalRef.current.phi));
 
+                            // Recalculate camera position around the updated target
                             updateCameraPosition();
                         } else {
                             // Regular drag: Pan controls (move camera and target together)

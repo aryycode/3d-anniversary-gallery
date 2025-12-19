@@ -12,7 +12,6 @@ const DATA_FILE = path.join(__dirname, 'data', 'photos.json');
 app.use(cors());
 app.use(bodyParser.json({ limit: '50mb' })); // Support large base64 images
 app.use(bodyParser.urlencoded({ extended: true, limit: '50mb' }));
-app.use(express.static('public'));
 
 // Ensure data directory exists
 async function ensureDataDirectory() {
@@ -74,12 +73,18 @@ app.delete('/api/photos/:id', async (req, res) => {
     }
 });
 
-// Serve gallery page
+// Serve gallery or admin page
 app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+    // Check for admin parameter
+    const adminKey = req.query.admin;
+    if (adminKey === 'aryy') {
+        res.sendFile(path.join(__dirname, 'public', 'admin.html'));
+    } else {
+        res.sendFile(path.join(__dirname, 'public', 'index.html'));
+    }
 });
 
-// Serve admin page
+// Serve admin page (alternative route)
 app.get('/admin', (req, res) => {
     // Check for admin parameter
     const adminKey = req.query.admin;
@@ -89,6 +94,9 @@ app.get('/admin', (req, res) => {
         res.redirect('/');
     }
 });
+
+// Serve static files (CSS, JS, etc.) - placed after routes to allow route handlers priority
+app.use(express.static('public'));
 
 // Start server
 async function startServer() {
