@@ -274,9 +274,11 @@ const { useState, useEffect, useRef } = React;
 
                             // Clamp vertical angle to prevent flipping
                             sphericalRef.current.phi = Math.max(0.1, Math.min(Math.PI - 0.1, sphericalRef.current.phi));
+
+                            updateCameraPosition();
                         } else {
-                            // Regular drag: Pan controls (move the target/focal point)
-                            const panSpeed = 0.01;
+                            // Regular drag: Pan controls (move camera and target together)
+                            const panSpeed = 0.02;
 
                             // Get camera's right and up vectors for proper panning
                             const cameraRight = new THREE.Vector3();
@@ -286,12 +288,15 @@ const { useState, useEffect, useRef } = React;
                             cameraRight.cross(camera.up).normalize();
                             cameraUp.copy(camera.up).normalize();
 
-                            // Pan the target
-                            targetRef.current.addScaledVector(cameraRight, -deltaX * panSpeed * sphericalRef.current.radius * 0.1);
-                            targetRef.current.addScaledVector(cameraUp, deltaY * panSpeed * sphericalRef.current.radius * 0.1);
-                        }
+                            // Calculate pan offset
+                            const panOffset = new THREE.Vector3();
+                            panOffset.addScaledVector(cameraRight, -deltaX * panSpeed);
+                            panOffset.addScaledVector(cameraUp, deltaY * panSpeed);
 
-                        updateCameraPosition();
+                            // Move both camera and target by the same amount (free-roam pan)
+                            camera.position.add(panOffset);
+                            targetRef.current.add(panOffset);
+                        }
 
                         previousMousePosition.current = { x: e.clientX, y: e.clientY };
                     }
@@ -391,8 +396,8 @@ const { useState, useEffect, useRef } = React;
                         const deltaX = e.touches[0].clientX - previousMousePosition.current.x;
                         const deltaY = e.touches[0].clientY - previousMousePosition.current.y;
 
-                        // Pan controls (move the target/focal point)
-                        const panSpeed = 0.01;
+                        // Pan controls (move camera and target together)
+                        const panSpeed = 0.02;
 
                         // Get camera's right and up vectors for proper panning
                         const cameraRight = new THREE.Vector3();
@@ -402,11 +407,14 @@ const { useState, useEffect, useRef } = React;
                         cameraRight.cross(camera.up).normalize();
                         cameraUp.copy(camera.up).normalize();
 
-                        // Pan the target
-                        targetRef.current.addScaledVector(cameraRight, -deltaX * panSpeed * sphericalRef.current.radius * 0.1);
-                        targetRef.current.addScaledVector(cameraUp, deltaY * panSpeed * sphericalRef.current.radius * 0.1);
+                        // Calculate pan offset
+                        const panOffset = new THREE.Vector3();
+                        panOffset.addScaledVector(cameraRight, -deltaX * panSpeed);
+                        panOffset.addScaledVector(cameraUp, deltaY * panSpeed);
 
-                        updateCameraPosition();
+                        // Move both camera and target by the same amount (free-roam pan)
+                        camera.position.add(panOffset);
+                        targetRef.current.add(panOffset);
 
                         previousMousePosition.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
                     } else if (e.touches.length === 2 && initialPinchDistance.current !== null) {
